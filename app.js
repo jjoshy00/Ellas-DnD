@@ -102,7 +102,7 @@
       <h2>Charakter</h2>
       <label class="f">Name<input data-bind="name" value="${esc(c.name)}"></label>
       <div class="grid2">
-        <label class="f">Klasse<select data-bind="klass">${Object.entries(R.classes).map(([key, v]) => `<option value="${key}"${key === c.klass ? ' selected' : ''}>${v.name}</option>`).join('')}</select></label>
+        <label class="f">Klasse<div class="fixed">${esc(k.name)}</div></label>
         <label class="f">Unterklasse<select data-bind="sub"><option value="">–</option>${subs.map((s) => `<option${s === c.sub ? ' selected' : ''}>${esc(s)}</option>`).join('')}</select></label>
       </div>
       <div class="grid3">
@@ -394,7 +394,7 @@
       const b = e.target.closest('[data-d-act]');
       if (b) onClick(b.dataset.dAct, b, e);
     };
-    dlg.showModal();
+    if (!dlg.open) dlg.showModal();
   }
 
   function pickAttr(i) {
@@ -521,13 +521,29 @@
     });
   }
 
+  // Neuer Charakter: Name und Klasse werden einmalig festgelegt.
+  function newCharDialog() {
+    openDialog(`<h3>Neuer Charakter</h3>
+      <label class="f">Name<input id="nn" placeholder="Name"></label>
+      <p class="hint">Klasse wählen – sie lässt sich danach nicht mehr ändern.</p>
+      ${Object.entries(R.classes).map(([key, v]) => `<button class="choice" data-d-act="klass" data-k="${key}" style="border-left:6px solid ${v.color}">${esc(v.name)}<small>Ressource: ${esc(v.resource)}</small></button>`).join('')}
+      <div class="row end"><button class="btn" data-d-act="close">Abbrechen</button></div>`,
+    (act, b) => {
+      if (act === 'klass') {
+        const c = newChar($('#nn', dlg).value.trim() || 'Neuer Charakter', b.dataset.k);
+        S.chars.push(c); S.current = c.id; S.tab = 'bogen'; save(); render();
+      }
+      dlg.close();
+    });
+  }
+
   function charMenu() {
     openDialog(`<h3>Charaktere</h3><div class="char-list">
       ${S.chars.map((c) => `<button class="choice${c.id === S.current ? ' on' : ''}" data-d-act="sel" data-id="${c.id}">${esc(c.name)}<small>${esc(klassOf(c).name)} · Level ${c.level}</small></button>`).join('')}</div>
       <div class="row end"><button class="btn danger" data-d-act="del">Aktuellen löschen</button><button class="btn fill" data-d-act="new">+ Neuer Charakter</button></div>`,
     (act, b) => {
       if (act === 'sel') { S.current = b.dataset.id; save(); render(); }
-      if (act === 'new') { const c = newChar(); S.chars.push(c); S.current = c.id; S.tab = 'bogen'; save(); render(); }
+      if (act === 'new') return newCharDialog();
       if (act === 'del') {
         if (S.chars.length < 2) return alert('Der letzte Charakter kann nicht gelöscht werden.');
         if (!confirm(`„${ch().name}“ wirklich löschen?`)) return;
