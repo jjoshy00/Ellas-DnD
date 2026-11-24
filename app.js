@@ -23,6 +23,7 @@
   function hicks() {
     const c = newChar('Hicks', 'zauberer');
     c.level = 1;
+    c.laufName = 'Joshua';
     c.notes = 'Ansichten der Dorfbewohner über Hicks:\nKleiner Quatschkopf/Chaot, will sich beweisen, macht aus vielem einen Wettbewerb, irgendwie sympathisch. Die Kinder im Dorf finden ihn gleichermaßen seltsam wie lustig (wie ein cooler Opa); verbreitet gute Laune.\n\nHeimatdorf: Hella (einen Tagesritt südlich von Hallrodon).';
     return c;
   }
@@ -36,6 +37,7 @@
   }
   // Einträge in Listen bekommen eine feste Kennung, damit der Abgleich sie zuordnen kann.
   function withIds(st) {
+    (st.chars || []).forEach((c) => { if (c.laufName === undefined && String(c.name).trim().toLowerCase() === 'hicks') c.laufName = 'Joshua'; });
     (st.chars || []).forEach((c) => ['items', 'freeItems'].forEach((l) => (c[l] || []).forEach((it) => { it.id ||= uid(); })));
     return st;
   }
@@ -54,8 +56,13 @@
     const missing = R.attributeGroups[info.group].skills.slice(0, -1).map(([n]) => n).filter((n) => attrStufe(c, n) < 1);
     return missing.length ? 'Erst skillbar, wenn diese mindestens Stufe 1 haben: ' + missing.join(', ') : '';
   }
-  const lpMax = (c) => R.startLP + c.level * R.lpPerLevel + 2 * attrStufe(c, 'Lebenspunktebonus') + num(c.lpExtra);
-  const resMax = (c) => num(c.resBase) + c.level * R.resourcePerLevel + attrStufe(c, 'Kampfgeist') + num(c.resExtra);
+  // Boni pro Levelaufstieg laut Tabelle (Aufstieg von Level i auf i+1 nutzt die Zeile von Level i).
+  const bonusAt = (i) => [...R.levelBonus].reverse().find((b) => i >= b.from) || R.levelBonus[0];
+  const bonusSum = (level, k) => { let t = 0; for (let i = 0; i < level; i++) t += bonusAt(i)[k]; return t; };
+  const levelFromPoints = (p) => R.levelPoints.filter((x) => p >= x).length;
+  const lpMax = (c) => R.startLP + bonusSum(c.level, 'lp') + 2 * attrStufe(c, 'Lebenspunktebonus') + num(c.lpExtra);
+  const resMax = (c) => num(c.resBase) + bonusSum(c.level, 'res') + attrStufe(c, 'Kampfgeist') + num(c.resExtra);
+  const levelPointsTotal = (c) => bonusSum(c.level, 'attr');
   const saveCount = (c) => 5 + attrStufe(c, 'Überlebenskunst');
   const spentPoints = (c) => num(c.atk) + num(c.def) + c.attrSlots.reduce((a, s) => a + (s.skill ? num(s.stufe) : 0), 0);
   const cur = (v, max) => (v === null || v === undefined ? max : Math.min(v, max));
@@ -107,7 +114,8 @@
   function bogen(c) {
     const k = klassOf(c);
     const lm = lpMax(c), rm = resMax(c);
-    const free = c.level - spentPoints(c);
+    const free = levelPointsTotal(c) - spentPoints(c);
+    const lz = c.lauf;
     const subs = Object.keys(R.subclasses[c.klass] || {});
     const n = saveCount(c);
     return `
@@ -116,7 +124,7 @@
       <label class="f">Name<input data-bind="name" value="${esc(c.name)}"></label>
       <div class="grid2">
         <label class="f">Klasse<div class="fixed">${esc(k.name)}</div></label>
-        <label class="f">Aktuelle Ausrichtung<select data-bind="sub"><option value="">–</option>${subs.map((s) => `<option${s === c.sub ? ' selected' : ''}>${esc(s)}</option>`).join('')}</select></label>
+        <label class="f">Aktuelle Ausrichtung${lz ? `<div class="fixed">${esc(c.sub ? c.sub.split(' (')[0] : 'keine (Mitte)')}</div>` : `<select data-bind="sub"><option value="">–</option>${subs.map((s) => `<option${s === c.sub ? ' selected' : ''}>${esc(s)}</option>`).join('')}</select>`}</label>
       </div>
       <div class="grid3">
         <label class="f">Alter<input data-bind="alter" value="${esc(c.alter)}"></label>
@@ -128,14 +136,16 @@
     <section class="stats">
       ${stat('Lebenspunkte', cur(c.lpCur, lm), lm, 'lp')}
       ${stat(k.resource, cur(c.resCur, rm), rm, 'res')}
-      ${stat('Level', c.level, undefined, 'level')}
+      ${lz ? `<div class="stat"><div class="lbl">Level</div><div class="val">${c.level}</div>
+        <div class="hint" style="margin:0">${lz.points} Punkte${R.levelPoints[c.level] !== undefined ? ` · nächstes ab ${R.levelPoints[c.level]}` : ''}</div></div>` : stat('Level', c.level, undefined, 'level')}
       <div class="stat"><div class="lbl">Punkte zu verteilen</div><div class="val">${free}</div>
-        <div class="hint" style="margin:4px 0 0">1 pro Level: ATK, DEF oder Attributfähigkeit</div></div>
+        <div class="hint" style="margin:4px 0 0">für ATK, DEF oder Attributfähigkeit</div></div>
       ${stat('ATK', c.atk + gearBonus(c, 'atk'), undefined, 'atk', gearBonus(c, 'atk') ? `${c.atk} geskillt ${gearBonus(c, 'atk') > 0 ? '+' : '−'} ${Math.abs(gearBonus(c, 'atk'))} Ausrüstung` : '')}
       ${stat('DEF', c.def + gearBonus(c, 'def'), undefined, 'def', gearBonus(c, 'def') ? `${c.def} geskillt ${gearBonus(c, 'def') > 0 ? '+' : '−'} ${Math.abs(gearBonus(c, 'def'))} Ausrüstung` : '')}
     </section>
     ${free < 0 ? '<p class="warn">Es sind mehr Punkte verteilt, als das Level hergibt.</p>' : ''}
 
+    ${alignCard(c)}
     <section class="card" style="margin-top:12px">
       <h2>Rettungswürfe <small>${n - c.saves.filter((_, i) => i < n && c.saves[i]).length} übrig</small></h2>
       <div class="saves">${Array.from({ length: n }, (_, i) => `<button class="save${c.saves[i] ? ' used' : ''}" data-act="save" data-i="${i}" aria-label="Rettungswurf ${i + 1}"></button>`).join('')}</div>
@@ -157,8 +167,9 @@
         <label class="f">${k.resource} Zusatz<input type="number" inputmode="numeric" data-bindn="resExtra" value="${num(c.resExtra)}"></label>
         <label class="f">LP Zusatz<input type="number" inputmode="numeric" data-bindn="lpExtra" value="${num(c.lpExtra)}"></label>
       </div>
-      <p class="hint">LP max = ${R.startLP} + ${R.lpPerLevel} je Level + 2 je Stufe Lebenspunktebonus + Zusatz.
-        ${k.resource} max = Start + ${R.resourcePerLevel} je Level + Stufe Kampfgeist + Zusatz.</p>
+      <label class="f">Name im Laufzettel der DM<input data-bind="laufName" value="${esc(c.laufName || '')}" placeholder="z. B. Joshua"></label>
+      <p class="hint">LP max = ${R.startLP} + Boni je Levelaufstieg (laut Tabelle) + 2 je Stufe Lebenspunktebonus + Zusatz.
+        ${k.resource} max = Start + Boni je Levelaufstieg + Stufe Kampfgeist + Zusatz.</p>
     </section>`;
   }
 
@@ -364,6 +375,131 @@
       });
       dlg.close();
     });
+  }
+
+  // ---------- Ausrichtung & Laufzettel ----------
+  const COLS = ['Gut', 'Neutral', 'Böse'], ROWS = ['Gesetzestreu', 'Neutral', 'Chaotisch'];
+  function regionSub(klass, col, row) {
+    const a = COLS[Math.floor(col / R.laufzettel.region)], b = ROWS[Math.floor(row / R.laufzettel.region)];
+    if (a === 'Neutral' && b === 'Neutral') return '';
+    return Object.keys(R.subclasses[klass] || {}).find((k) => k.endsWith(`(${a}, ${b})`)) || '';
+  }
+  const LZ_KEY = 'charakterbogen-laufzettel';
+  let LZ = (() => { try { return JSON.parse(localStorage.getItem(LZ_KEY)) || {}; } catch (e) { return {}; } })();
+  let lzStatus = '';
+  function alignCard(c) {
+    const g = R.laufzettel.grid, rg = R.laufzettel.region, cs = 16, off = 0;
+    const lz = c.lauf;
+    let svg = `<svg viewBox="-2 -16 ${g * cs + 92} ${g * cs + 20}" class="align">`;
+    for (let ry = 0; ry < 3; ry++) for (let rx = 0; rx < 3; rx++) {
+      const sub = regionSub(c.klass, rx * rg, ry * rg);
+      const mine = lz && Math.floor(lz.col / rg) === rx && Math.floor(lz.row / rg) === ry;
+      svg += `<rect x="${rx * rg * cs}" y="${ry * rg * cs}" width="${rg * cs}" height="${rg * cs}" fill="${mine ? 'var(--cl)' : 'transparent'}" stroke="var(--ink)" stroke-width="1.5"/>`;
+      svg += `<text x="${(rx + 0.5) * rg * cs}" y="${(ry + 0.5) * rg * cs}" text-anchor="middle" dominant-baseline="middle" class="al-sub">${esc(sub ? sub.split(' (')[0] : '')}</text>`;
+    }
+    for (let i = 1; i < g; i++) if (i % rg) {
+      svg += `<line x1="${i * cs}" y1="0" x2="${i * cs}" y2="${g * cs}" stroke="var(--line)" stroke-width=".5"/><line x1="0" y1="${i * cs}" x2="${g * cs}" y2="${i * cs}" stroke="var(--line)" stroke-width=".5"/>`;
+    }
+    COLS.forEach((t, i) => { svg += `<text x="${(i + 0.5) * rg * cs}" y="-5" text-anchor="middle" class="al-ax">${t}</text>`; });
+    ROWS.forEach((t, i) => { svg += `<text x="${g * cs + 5}" y="${(i + 0.5) * rg * cs}" dominant-baseline="middle" class="al-ax">${t}</text>`; });
+    if (lz) svg += `<circle cx="${(lz.col + 0.5) * cs}" cy="${(lz.row + 0.5) * cs}" r="6" fill="#c9211e" stroke="#fff" stroke-width="1.5"/>`;
+    svg += '</svg>';
+    return `<section class="card" style="margin-top:12px"><h2>Ausrichtung <small>${lz ? `Laufzettel, Stand ${esc(lz.when)}` : 'Laufzettel'}</small></h2>
+      ${svg}
+      ${!c.laufName ? '<p class="hint">Trage unten bei „Grundwerte“ deinen Namen im Laufzettel der DM ein, dann liest die App Position und Punkte von dort.</p>' : ''}
+      ${lzStatus ? `<p class="warn">${esc(lzStatus)}</p>` : ''}
+      ${lz ? `<p class="hint">Position und Punkte kommen aus dem Laufzettel der DM und werden beim Laden bzw. mit ⟳ aktualisiert.</p>` : ''}
+    </section>`;
+  }
+
+  // Minimales Entpacken einer .xlsx-Datei (ZIP) mit Bordmitteln des Browsers.
+  async function unzip(buf, wanted) {
+    const v = new DataView(buf), out = {};
+    let e = buf.byteLength - 22;
+    while (e >= 0 && v.getUint32(e, true) !== 0x06054b50) e--;
+    if (e < 0) throw new Error('keine gültige Tabelle');
+    let p = v.getUint32(e + 16, true);
+    const n = v.getUint16(e + 10, true), dec = new TextDecoder();
+    for (let k = 0; k < n; k++) {
+      const method = v.getUint16(p + 10, true), size = v.getUint32(p + 20, true);
+      const nl = v.getUint16(p + 28, true), xl = v.getUint16(p + 30, true), cl = v.getUint16(p + 32, true), lo = v.getUint32(p + 42, true);
+      const name = dec.decode(new Uint8Array(buf, p + 46, nl));
+      p += 46 + nl + xl + cl;
+      if (!wanted.includes(name)) continue;
+      const start = lo + 30 + v.getUint16(lo + 26, true) + v.getUint16(lo + 28, true);
+      const data = new Uint8Array(buf, start, size);
+      out[name] = method === 0 ? dec.decode(data)
+        : await new Response(new Blob([data]).stream().pipeThrough(new DecompressionStream('deflate-raw'))).text();
+    }
+    return out;
+  }
+  const colIndex = (ref) => { const m = /^([A-Z]+)(\d+)$/.exec(ref); let n = 0; for (const ch2 of m[1]) n = n * 26 + ch2.charCodeAt(0) - 64; return [n - 1, num(m[2]) - 1]; };
+  async function readLaufzettel() {
+    const res = await fetch(`https://docs.google.com/spreadsheets/d/${R.laufzettel.sheetId}/export?format=xlsx`, { cache: 'no-store' });
+    if (!res.ok) throw new Error('nicht lesbar');
+    const buf = await res.arrayBuffer();
+    if (new Uint8Array(buf)[0] !== 0x50) throw new Error('nicht lesbar');
+    const files = await unzip(buf, ['xl/sharedStrings.xml', 'xl/styles.xml', 'xl/worksheets/sheet1.xml']);
+    const xml = (t) => new DOMParser().parseFromString(t || '<x/>', 'application/xml');
+    const strings = [...xml(files['xl/sharedStrings.xml']).getElementsByTagName('si')].map((x) => x.textContent);
+    const st = xml(files['xl/styles.xml']);
+    const fontColor = [...st.getElementsByTagName('fonts')[0].getElementsByTagName('font')].map((f) => { const c = f.getElementsByTagName('color')[0]; return c ? c.getAttribute('rgb') || '' : ''; });
+    const xfs = [...st.getElementsByTagName('cellXfs')[0].getElementsByTagName('xf')].map((x) => num(x.getAttribute('fontId')));
+    const isRed = (rgb) => { if (!rgb || rgb.length < 6) return false; const h = rgb.slice(-6); const [r, g, b] = [0, 2, 4].map((i) => parseInt(h.slice(i, i + 2), 16)); return r > 150 && g < 110 && b < 110; };
+    return [...xml(files['xl/worksheets/sheet1.xml']).getElementsByTagName('c')].map((c) => {
+      const [col, row] = colIndex(c.getAttribute('r'));
+      const vEl = c.getElementsByTagName('v')[0], t = c.getAttribute('t');
+      const raw = vEl ? vEl.textContent : '';
+      const value = t === 's' ? strings[num(raw)] : t === 'inlineStr' ? c.textContent : raw;
+      return { col, row, value, formula: !!c.getElementsByTagName('f')[0], red: isRed(fontColor[xfs[num(c.getAttribute('s'))]]) };
+    });
+  }
+  function laufFor(cells, name) {
+    const key = String(name).trim().toLowerCase();
+    const head = cells.find((x) => typeof x.value === 'string' && x.value.replace(/:/g, '').trim().toLowerCase() === key);
+    if (!head) return null;
+    const g = R.laufzettel.grid;
+    const inGrid = cells.filter((x) => !x.formula && x.col >= head.col && x.col < head.col + g && x.row > head.row && x.row <= head.row + g);
+    const red = inGrid.find((x) => x.red);
+    const points = inGrid.reduce((a, x) => a + (Number.isFinite(parseFloat(x.value)) ? parseFloat(x.value) : 0), 0);
+    return { col: red ? red.col - head.col : null, row: red ? red.row - head.row - 1 : null, points };
+  }
+  async function refreshLaufzettel(manual = false) {
+    if (!S.chars.some((c) => c.laufName)) return;
+    try {
+      const cells = await readLaufzettel();
+      lzStatus = '';
+      const when = new Date().toLocaleString('de-DE', { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' });
+      const msgs = [];
+      S.chars.forEach((c) => {
+        if (!c.laufName) return;
+        const f = laufFor(cells, c.laufName);
+        if (!f) { msgs.push(`„${c.laufName}“ steht nicht im Laufzettel.`); return; }
+        LZ[c.id] = { ...f, when };
+      });
+      try { localStorage.setItem(LZ_KEY, JSON.stringify(LZ)); } catch (e) { /* egal */ }
+      if (msgs.length) lzStatus = msgs.join(' ');
+      applyLaufzettel(true);
+    } catch (e) {
+      lzStatus = navigator.onLine ? 'Laufzettel nicht lesbar. Die DM muss ihn einmal freigeben: Teilen → Allgemeiner Zugriff → „Jeder, der über den Link verfügt“ (Betrachter).' : 'Offline – Laufzettel wird beim nächsten Laden mit Internet gelesen.';
+      if (manual) alert(lzStatus);
+      render();
+    }
+  }
+  // Werte aus dem Laufzettel in die Charaktere übernehmen (Level aus Punkten, Ausrichtung aus der Position).
+  function applyLaufzettel(announce) {
+    let up = '';
+    S.chars.forEach((c) => {
+      const f = c.laufName && LZ[c.id];
+      c.lauf = f || null;
+      if (!f) return;
+      const lvl = levelFromPoints(f.points);
+      if (lvl > c.level && c.id === S.current) up = `Levelaufstieg auf Level ${lvl}!`;
+      c.level = lvl;
+      if (f.col !== null) c.sub = regionSub(c.klass, f.col, f.row);
+    });
+    save(); render();
+    if (announce && up) toast(up);
   }
 
   function inventar(c) {
@@ -627,10 +763,10 @@
       case 'level': {
         const c = ch(), to = c.level + d;
         if (to < 0) return;
-        const res = klassOf(c).resource;
+        const res = klassOf(c).resource, bo = bonusAt(d > 0 ? c.level : to);
         const q = d > 0
-          ? `Levelaufstieg auf Level ${to}?\n\nDadurch: +${R.lpPerLevel} LP, +${R.resourcePerLevel} ${res} und 1 Punkt zum Verteilen (ATK, DEF oder Attributfähigkeit).`
-          : `Level wirklich auf ${to} senken?\n\nDadurch: −${R.lpPerLevel} LP, −${R.resourcePerLevel} ${res} und 1 Punkt weniger zum Verteilen.`;
+          ? `Levelaufstieg auf Level ${to}?\n\nDadurch: +${bo.lp} LP, +${bo.res} ${res} und ${bo.attr} Punkt(e) zum Verteilen (ATK, DEF oder Attributfähigkeit).`
+          : `Level wirklich auf ${to} senken?\n\nDadurch: −${bo.lp} LP, −${bo.res} ${res} und ${bo.attr} Punkt(e) weniger zum Verteilen.`;
         if (!confirm(q)) return;
         return change((c) => { c.level = to; });
       }
@@ -714,9 +850,9 @@
   // Widerspruch, wenn mehr Punkte verteilt würden, als das Level hergibt (DM-Ausnahmen bleiben möglich).
   function pointOk(d) {
     if (d <= 0) return true;
-    const c = ch(), free = c.level - spentPoints(c);
+    const c = ch(), total = levelPointsTotal(c), free = total - spentPoints(c);
     if (free > 0) return true;
-    return confirm(`Keine Punkte mehr zu verteilen: Level ${c.level} gibt ${c.level} Punkte, verteilt sind schon ${spentPoints(c)}.\n\nTrotzdem skillen (z. B. weil der DM es erlaubt)?`);
+    return confirm(`Keine Punkte mehr zu verteilen: Level ${c.level} gibt ${total} Punkte, verteilt sind schon ${spentPoints(c)}.\n\nTrotzdem skillen (z. B. weil der DM es erlaubt)?`);
   }
 
   function exportFile() {
@@ -742,7 +878,7 @@
   const loadSync = () => { try { return JSON.parse(localStorage.getItem(SYNC_KEY)) || {}; } catch (e) { return {}; } };
   let Y = loadSync();
   const saveSync = () => { try { localStorage.setItem(SYNC_KEY, JSON.stringify(Y)); } catch (e) { /* kein Speicher */ } };
-  const shared = (st) => JSON.parse(JSON.stringify({ chars: st.chars }));
+  const shared = (st) => JSON.parse(JSON.stringify({ chars: st.chars.map(({ lauf, ...c }) => c) }));
 
   // JSON mit sortierten Schlüsseln vergleichen
   const canon = (v) => JSON.stringify(v, (k, x) => (x && typeof x === 'object' && !Array.isArray(x) ? Object.keys(x).sort().reduce((o, key) => { o[key] = x[key]; return o; }, {}) : x));
@@ -845,7 +981,7 @@
     S.chars = withIds(JSON.parse(JSON.stringify(data))).chars;
     if (!S.chars.some((c) => c.id === S.current)) S.current = S.chars[0].id;
     Y.base = shared(S); Y.last = new Date().toLocaleString('de-DE', { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' });
-    save(); saveSync(); render(); toast(msg);
+    save(); saveSync(); applyLaufzettel(false); toast(msg);
     checkDuplicates();
   }
 
@@ -1026,8 +1162,10 @@
   // Beim Laden (auch Neu-Laden im Browser) automatisch abgleichen.
   let skip = false;
   try { skip = sessionStorage.getItem('cb-synced') === '1'; sessionStorage.removeItem('cb-synced'); } catch (e) { /* egal */ }
-  if (!skip && Y.token) setTimeout(() => sync(true), 300);
-  else setTimeout(checkDuplicates, 300);
+  setTimeout(async () => {
+    if (!skip && Y.token) await sync(true); else checkDuplicates();
+    if (!dlg.open) await refreshLaufzettel();
+  }, 300);
   // Meldung, die vor dem Neuladen nicht mehr zu sehen war (z. B. nach ⟳), noch einmal zeigen.
   try { const m = sessionStorage.getItem('cb-toast'); if (m) setTimeout(() => toast(m), 200); } catch (e) { /* egal */ }
   // Kommt die installierte App aus dem Hintergrund zurück, ebenfalls abgleichen.

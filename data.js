@@ -6,6 +6,20 @@ window.RULES = {
   lpPerLevel: 1,
   resourcePerLevel: 1,
   equipmentSlots: 9,  // Ausrüstungsslots (Namen sind in der App frei wählbar)
+  // Level (Tabelle „DnD_Orga_Punkte_NEU“): Punkte, ab denen das nächste Level erreicht ist (Level 0 → 1 ab 5 Punkten …).
+  levelPoints: [5, 10, 15, 20, 25, 30, 36, 42, 48, 54, 60, 67, 74, 81, 88, 95, 103, 111, 119, 127, 135],
+  // Boni pro Aufstieg, je nach Level, von dem aus aufgestiegen wird.
+  levelBonus: [
+    { from: 0, lp: 1, res: 1, attr: 1 },
+    { from: 5, lp: 2, res: 1, attr: 1 },
+    { from: 10, lp: 2, res: 2, attr: 1 },
+    { from: 15, lp: 2, res: 2, attr: 2 },
+    { from: 20, lp: 3, res: 2, attr: 2 },
+    { from: 25, lp: 3, res: 3, attr: 2 },
+    { from: 30, lp: 3, res: 3, attr: 3 },
+  ],
+  // Laufzettel der DM (Google-Tabelle): rote Zahl = Position auf dem Ausrichtungs-Chart, Summe = Punkte.
+  laufzettel: { sheetId: '1Bucq40p-VDb47HDRdqjeQQpJTg0EFQ1WSLrpbkA1arA', grid: 15, region: 5 },
   inventorySlots: 3,   // Grund-Inventarslots, + 1 je Stufe Traglast, + Ausbau
 
   classes: {
