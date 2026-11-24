@@ -873,10 +873,10 @@
     openDialog(`<h3>Abgleich einrichten</h3>
       <p class="hint">Einmal pro Gerät nötig. Die Daten werden als geheime Datei („Gist“) in deinem GitHub-Konto abgelegt.</p>
       <ol class="steps">
-        <li>Öffne <a href="https://github.com/settings/tokens/new?scopes=gist&description=Charakterbogen" target="_blank" rel="noopener">diesen Link</a> (bei GitHub angemeldet).</li>
+        <li>Öffne <a href="https://github.com/settings/tokens/new?scopes=gist&description=Charakterbogen%20${encodeURIComponent(new Date().toLocaleString('de-DE'))}" target="_blank" rel="noopener">diesen Link</a> (bei GitHub angemeldet).</li>
         <li>Bei „Expiration“ <b>No expiration</b> wählen. Das Häkchen bei <b>gist</b> ist schon gesetzt.</li>
         <li>Ganz unten <b>Generate token</b> drücken und den Schlüssel (beginnt mit <code>ghp_</code>) kopieren.</li>
-        <li>Hier einfügen. Auf dem zweiten Gerät kannst du denselben Schlüssel verwenden.</li>
+        <li>Hier einfügen. Auf dem zweiten Gerät kannst du denselben Schlüssel verwenden – dann ist kein neuer nötig.</li>
       </ol>
       <label class="f">Zugangsschlüssel<input id="tok" autocomplete="off" spellcheck="false" placeholder="ghp_…" value="${esc(Y.token || '')}"></label>
       <div class="row end"><button class="btn" data-d-act="close">Abbrechen</button><button class="btn fill" data-d-act="ok">Speichern</button></div>`,
