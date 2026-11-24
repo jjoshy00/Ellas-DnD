@@ -432,14 +432,15 @@
       case 'lp': return change((c) => { const m = lpMax(c); c.lpCur = Math.max(0, Math.min(m, cur(c.lpCur, m) + d)); });
       case 'res': return change((c) => { const m = resMax(c); c.resCur = Math.max(0, Math.min(m, cur(c.resCur, m) + d)); });
       case 'level': return change((c) => { c.level = Math.max(0, c.level + d); });
-      case 'atk': return change((c) => { c.atk = Math.max(0, c.atk + d); });
-      case 'def': return change((c) => { c.def = Math.max(0, c.def + d); });
+      case 'atk': if (!pointOk(d)) return; return change((c) => { c.atk = Math.max(0, c.atk + d); });
+      case 'def': if (!pointOk(d)) return; return change((c) => { c.def = Math.max(0, c.def + d); });
       case 'save': return change((c) => { c.saves[i] = !c.saves[i]; });
       case 'pickAttr': return pickAttr(i);
       case 'pickClass': return pickClass(i);
       case 'attrStufe': {
         const s = ch().attrSlots[i];
         if (d > 0 && lockedReason(ch(), s.skill)) return alert(lockedReason(ch(), s.skill));
+        if (!pointOk(d)) return;
         return change((c) => { c.attrSlots[i].stufe = Math.max(0, c.attrSlots[i].stufe + d); });
       }
       case 'classStufe': return change((c) => { c.classSlots[i].stufe = Math.max(0, Math.min(6, c.classSlots[i].stufe + d)); });
@@ -463,6 +464,14 @@
       case 'export': return exportFile();
     }
   });
+
+  // Widerspruch, wenn mehr Punkte verteilt würden, als das Level hergibt (DM-Ausnahmen bleiben möglich).
+  function pointOk(d) {
+    if (d <= 0) return true;
+    const c = ch(), free = c.level - spentPoints(c);
+    if (free > 0) return true;
+    return confirm(`Keine Punkte mehr zu verteilen: Level ${c.level} gibt ${c.level} Punkte, verteilt sind schon ${spentPoints(c)}.\n\nTrotzdem skillen (z. B. weil der DM es erlaubt)?`);
+  }
 
   function exportFile() {
     const blob = new Blob([JSON.stringify(S, null, 2)], { type: 'application/json' });
