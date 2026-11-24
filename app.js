@@ -793,6 +793,62 @@
     if (!S.chars.some((c) => c.id === S.current)) S.current = S.chars[0].id;
     Y.base = shared(S); Y.last = new Date().toLocaleString('de-DE', { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' });
     save(); saveSync(); render(); toast(msg);
+    checkDuplicates();
+  }
+
+  // Gleichnamige Charaktere, die auf zwei Geräten getrennt angelegt wurden, gelten als derselbe.
+  const nameKey = (c) => String(c.name || '').trim().toLowerCase();
+  function templateFor(c) {
+    const t = nameKey(c) === 'hicks' ? hicks() : newChar(c.name, c.klass);
+    t.id = c.id; t.name = c.name;
+    return JSON.parse(JSON.stringify(t));
+  }
+  function pairByName(base, local, remote) {
+    const inBase = new Set((base.chars || []).map((c) => c.id)), localIds = new Set(local.chars.map((c) => c.id)), remoteIds = new Set(remote.chars.map((c) => c.id));
+    const b = JSON.parse(JSON.stringify(base)); b.chars ||= [];
+    const r = JSON.parse(JSON.stringify(remote));
+    r.chars.forEach((rc) => {
+      if (localIds.has(rc.id) || inBase.has(rc.id)) return;
+      const lc = local.chars.find((x) => nameKey(x) === nameKey(rc) && !remoteIds.has(x.id) && !inBase.has(x.id));
+      if (!lc) return;
+      rc.id = lc.id; remoteIds.add(lc.id);
+      b.chars.push(templateFor(lc));
+    });
+    return [b, r];
+  }
+  function checkDuplicates() {
+    if (dlg.open) return;
+    const seen = new Map();
+    const dup = S.chars.map((c) => { const k = nameKey(c); if (seen.has(k)) return [seen.get(k), c]; seen.set(k, c); return null; }).find(Boolean);
+    if (!dup) return;
+    const [a, b] = dup;
+    const info = (c) => `Level ${c.level}${c.alter ? ', Alter ' + c.alter : ''}${c.groesse ? ', Größe ' + c.groesse : ''}, ${(c.items || []).length} Gegenstände`;
+    openDialog(`<h3>„${esc(a.name)}“ gibt es zweimal</h3>
+      <p class="hint">Wahrscheinlich wurde der Charakter auf PC und Handy getrennt angelegt.</p>
+      <p>1: ${esc(info(a))}<br>2: ${esc(info(b))}</p>
+      <button class="choice" data-d-act="join">Zu einem zusammenführen<small>Eingaben beider werden übernommen, bei Widersprüchen fragt die App.</small></button>
+      <div class="row end"><button class="btn" data-d-act="close">Später</button></div>`,
+    (act) => {
+      dlg.close();
+      if (act !== 'join') return;
+      const conflicts = [];
+      const bb = { ...JSON.parse(JSON.stringify(b)), id: a.id };
+      const joined = merge(templateFor(a), JSON.parse(JSON.stringify(a)), bb, [{ id: a.id, name: a.name }], conflicts);
+      const done = (c) => {
+        S.chars = S.chars.filter((x) => x.id !== b.id).map((x) => (x.id === a.id ? c : x));
+        if (S.current === b.id) S.current = a.id;
+        save(); render();
+        if (Y.token) pushNow('Zusammengeführt und gespeichert.'); else toast('Zusammengeführt.');
+      };
+      if (conflicts.length) conflictDialog(joined, conflicts, done, ['Eintrag 1', 'Eintrag 2'], 'Diese Angaben stehen in beiden Einträgen verschieden. Welche gilt?');
+      else done(joined);
+    });
+  }
+  async function pushNow(msg) {
+    setButton('busy');
+    try { await writeGist(shared(S)); finish(shared(S), msg); }
+    catch (e) { alert('Speichern hat nicht geklappt: ' + (e.message || e)); }
+    finally { setButton(); }
   }
   function toast(msg) {
     let t = $('#toast');
@@ -822,8 +878,9 @@
         return firstTimeDialog(local, remote);
       }
       const conflicts = [];
-      const merged = merge(Y.base, local, remote, [], conflicts);
-      if (conflicts.length) { setButton(); return conflictDialog(merged, conflicts, remote); }
+      const [base, rem] = pairByName(Y.base, local, remote);
+      const merged = merge(base, local, rem, [], conflicts);
+      if (conflicts.length) { setButton(); return conflictDialog(merged, conflicts, (m) => complete(m, remote)); }
       await complete(merged, remote);
     } catch (e) {
       const msg = navigator.onLine ? 'Aktualisieren hat nicht geklappt: ' + (e.message || e) : 'Offline – Abgleich beim nächsten Laden mit Internet.';
@@ -850,23 +907,25 @@
       if (act === 'take') finish(remote, 'Daten übernommen.');
       if (act === 'merge') {
         const conflicts = [];
-        const merged = merge({}, local, remote, [], conflicts);
-        if (conflicts.length) conflictDialog(merged, conflicts, remote); else complete(merged, remote);
+        const [base, rem] = pairByName({ chars: [] }, local, remote);
+        const merged = merge(base, local, rem, [], conflicts);
+        if (conflicts.length) conflictDialog(merged, conflicts, (m) => complete(m, remote)); else complete(merged, remote);
       }
     });
   }
-  function conflictDialog(merged, conflicts, remote) {
-    const choice = conflicts.map((x) => x.l);
+  function conflictDialog(merged, conflicts, onOk, labels = ['Dieses Gerät', 'Anderes Gerät'], intro = 'Diese Angaben wurden auf beiden Geräten unterschiedlich geändert. Welche gilt?') {
+    const pick = conflicts.map(() => 'l');
+    const choice = () => conflicts.map((x, i) => (pick[i] === 'l' ? x.l : x.r));
     const draw = () => `<h3>Unterschiede klären</h3>
-      <p class="hint">Diese Angaben wurden auf beiden Geräten unterschiedlich geändert. Welche gilt?</p>
+      <p class="hint">${esc(intro)}</p>
       ${conflicts.map((x, i) => `<div class="conflict"><b>${esc(pathText(x.path))}</b>
-        <button class="choice${choice[i] === x.l ? ' on' : ''}" data-d-act="pick" data-i="${i}" data-s="l">Dieses Gerät<small>${esc(shown(x.l))}</small></button>
-        <button class="choice${choice[i] === x.r ? ' on' : ''}" data-d-act="pick" data-i="${i}" data-s="r">Anderes Gerät<small>${esc(shown(x.r))}</small></button></div>`).join('')}
+        <button class="choice${pick[i] === 'l' ? ' on' : ''}" data-d-act="pick" data-i="${i}" data-s="l">${esc(labels[0])}<small>${esc(shown(x.l))}</small></button>
+        <button class="choice${pick[i] === 'r' ? ' on' : ''}" data-d-act="pick" data-i="${i}" data-s="r">${esc(labels[1])}<small>${esc(shown(x.r))}</small></button></div>`).join('')}
       <div class="row end"><button class="btn" data-d-act="close">Abbrechen</button><button class="btn fill" data-d-act="ok">Übernehmen</button></div>`;
     openDialog(draw(), (act, b) => {
-      if (act === 'pick') { const i = num(b.dataset.i); choice[i] = b.dataset.s === 'l' ? conflicts[i].l : conflicts[i].r; const top = dlg.scrollTop; dlg.innerHTML = draw(); dlg.scrollTop = top; return; }
+      if (act === 'pick') { pick[num(b.dataset.i)] = b.dataset.s; const top = dlg.scrollTop; dlg.innerHTML = draw(); dlg.scrollTop = top; return; }
       dlg.close();
-      if (act === 'ok') complete(resolve(merged, choice), remote);
+      if (act === 'ok') onOk(resolve(merged, choice()));
     });
   }
   function tokenDialog(thenSync) {
@@ -914,7 +973,8 @@
   // Beim Laden (auch Neu-Laden im Browser) automatisch abgleichen.
   let skip = false;
   try { skip = sessionStorage.getItem('cb-synced') === '1'; sessionStorage.removeItem('cb-synced'); } catch (e) { /* egal */ }
-  if (!skip) setTimeout(() => sync(true), 300);
+  if (!skip && Y.token) setTimeout(() => sync(true), 300);
+  else setTimeout(checkDuplicates, 300);
   // Meldung, die vor dem Neuladen nicht mehr zu sehen war (z. B. nach ⟳), noch einmal zeigen.
   try { const m = sessionStorage.getItem('cb-toast'); if (m) setTimeout(() => toast(m), 200); } catch (e) { /* egal */ }
   // Kommt die installierte App aus dem Hintergrund zurück, ebenfalls abgleichen.
