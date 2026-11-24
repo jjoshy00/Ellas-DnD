@@ -72,10 +72,18 @@
   }
 
   // ---------- Darstellung ----------
+  // Im dunklen Modus wird die helle Klassenfarbe durch eine dunkle Tönung ersetzt, damit Text lesbar bleibt.
+  const darkMode = window.matchMedia('(prefers-color-scheme: dark)');
+  function mixHex(a, b, t) {
+    const p = (h) => [1, 3, 5].map((i) => parseInt(h.slice(i, i + 2), 16));
+    const [x, y] = [p(a), p(b)];
+    return '#' + x.map((v, i) => Math.round(v * t + y[i] * (1 - t)).toString(16).padStart(2, '0')).join('');
+  }
+  if (darkMode.addEventListener) darkMode.addEventListener('change', () => applyTheme());
   function applyTheme() {
     const k = klassOf(ch());
     document.documentElement.style.setProperty('--c', k.color);
-    document.documentElement.style.setProperty('--cl', k.light);
+    document.documentElement.style.setProperty('--cl', darkMode.matches ? mixHex(k.color, '#221e26', 0.3) : k.light);
     $('meta[name=theme-color]').setAttribute('content', k.color);
     $('#title').textContent = ch().name || 'Charakterbogen';
     $('#subtitle').textContent = [k.name, ch().sub.split(' (')[0]].filter(Boolean).join(' · ');
@@ -108,7 +116,7 @@
       <label class="f">Name<input data-bind="name" value="${esc(c.name)}"></label>
       <div class="grid2">
         <label class="f">Klasse<div class="fixed">${esc(k.name)}</div></label>
-        <label class="f">Unterklasse<select data-bind="sub"><option value="">–</option>${subs.map((s) => `<option${s === c.sub ? ' selected' : ''}>${esc(s)}</option>`).join('')}</select></label>
+        <label class="f">Aktuelle Ausrichtung<select data-bind="sub"><option value="">–</option>${subs.map((s) => `<option${s === c.sub ? ' selected' : ''}>${esc(s)}</option>`).join('')}</select></label>
       </div>
       <div class="grid3">
         <label class="f">Alter<input data-bind="alter" value="${esc(c.alter)}"></label>
@@ -172,7 +180,7 @@
       <p class="hint">Die unterste Fähigkeit jeder Farbe ist erst skillbar, wenn die anderen fünf derselben Farbe mindestens Stufe 1 haben.</p>
     </section>
     <section class="card">
-      <h2>Klassenpunkte <span class="row"><small>${esc(c.sub ? c.sub.split(' (')[0] : 'keine Unterklasse')}</small><button class="btn small" data-act="catalog">Katalog</button></span></h2>
+      <h2>Klassenpunkte <span class="row"><small>${esc(c.sub ? c.sub.split(' (')[0] : 'keine Ausrichtung gewählt')}</small><button class="btn small" data-act="catalog">Katalog</button></span></h2>
       ${c.classSlots.map((s, i) => {
         if (!s.name) return `<div class="slot empty"><span class="dot" style="background:var(--line)"></span><button class="name btn small" style="text-align:left" data-act="pickClass" data-i="${i}">+ Klassenfähigkeit wählen</button></div>`;
         const a = findAbility(c, s);
@@ -183,7 +191,7 @@
           <button class="btn small" data-act="classStufe" data-i="${i}" data-d="1" aria-label="Stufe erhöhen">+</button>
           <span class="lvl" title="Stufe">${s.stufe}</span></div>`;
       }).join('')}
-      <p class="hint">Klassenfähigkeiten haben die Stufen 1–6. Wählbar sind nur die Fähigkeiten der aktuellen Unterklasse (Reiter „Bogen“). Fähigkeiten aus einer früheren Unterklasse bleiben stehen und sind grau markiert.</p>
+      <p class="hint">Klassenfähigkeiten haben die Stufen 1–6. Wählbar sind nur die Fähigkeiten der aktuellen Ausrichtung (Reiter „Bogen“). Fähigkeiten aus einer früheren Ausrichtung bleiben stehen und sind grau markiert.</p>
     </section>`;
   }
 
@@ -433,7 +441,7 @@
     const taken = (n) => c.classSlots.some((x, j) => j !== i && x.name === n && x.klass === c.klass && x.from === c.sub);
     openDialog(`<h3>Klassenfähigkeit</h3>
       ${c.sub ? `<p class="hint">${esc(klassOf(c).name)} · ${esc(c.sub)}</p>` : ''}
-      ${sub.length ? sub.map(([n, d]) => `<button class="choice" data-d-act="pick" data-n="${esc(n)}"${taken(n) ? ' disabled' : ''}>${esc(n)}<small>${esc(taken(n) ? 'schon eingetragen' : d)}</small></button>`).join('') : '<p class="hint">Wähle zuerst im Reiter „Bogen“ die aktuelle Unterklasse, dann erscheinen hier ihre Fähigkeiten.</p>'}
+      ${sub.length ? sub.map(([n, d]) => `<button class="choice" data-d-act="pick" data-n="${esc(n)}"${taken(n) ? ' disabled' : ''}>${esc(n)}<small>${esc(taken(n) ? 'schon eingetragen' : d)}</small></button>`).join('') : '<p class="hint">Wähle zuerst im Reiter „Bogen“ die aktuelle Ausrichtung, dann erscheinen hier ihre Fähigkeiten.</p>'}
       <div class="row end">${slot.name ? '<button class="btn danger" data-d-act="clear">Platz leeren</button>' : ''}<button class="btn" data-d-act="close">Abbrechen</button></div>`,
     (act, b) => {
       if (act === 'pick') change((c) => {
@@ -759,11 +767,11 @@
     return v;
   }
 
-  const FIELD = { name: 'Name', sub: 'Unterklasse', alter: 'Alter', rasse: 'Rasse', groesse: 'Größe', level: 'Level', lpCur: 'Lebenspunkte', lpExtra: 'LP Zusatz',
+  const FIELD = { name: 'Name', sub: 'Ausrichtung', alter: 'Alter', rasse: 'Rasse', groesse: 'Größe', level: 'Level', lpCur: 'Lebenspunkte', lpExtra: 'LP Zusatz',
     resCur: 'Ressource', resBase: 'Ressource Start', resExtra: 'Ressource Zusatz', atk: 'ATK', def: 'DEF', saves: 'Rettungswürfe', vorteil: 'Vorteil', nachteil: 'Nachteil',
     money: 'Geld', moneyLog: 'Buchungen', attrSlots: 'Levelpunkte', classSlots: 'Klassenpunkte', aspects: 'Übungskreise', techniques: 'Techniken', items: 'Inventar',
     freeItems: 'Ohne Inventarslot', equip: 'Ausrüstung', notes: 'Notizen', slotExtra: 'Slot-Ausbau', stufe: 'Stufe', punkte: 'Punkte', skill: 'Fähigkeit', qty: 'Anzahl',
-    note: 'Notiz', label: 'Slot-Name', item: 'Gegenstand', diff: 'Schwierigkeit', klass: 'Klasse', from: 'Unterklasse' };
+    note: 'Notiz', label: 'Slot-Name', item: 'Gegenstand', diff: 'Schwierigkeit', klass: 'Klasse', from: 'Ausrichtung' };
   const pathText = (path) => path.filter((p) => p !== 'chars').map((p) => (typeof p === 'object' ? p.name || 'Eintrag' : typeof p === 'number' ? `Nr. ${p + 1}` : FIELD[p] || p)).join(' › ');
   function shown(v) {
     if (v === undefined || v === null) return v === undefined ? '(gelöscht)' : '(voll)';
