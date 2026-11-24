@@ -518,7 +518,14 @@
       case 'level': return change((c) => { c.level = Math.max(0, c.level + d); });
       case 'atk': if (!pointOk(d)) return; return change((c) => { c.atk = Math.max(0, c.atk + d); });
       case 'def': if (!pointOk(d)) return; return change((c) => { c.def = Math.max(0, c.def + d); });
-      case 'save': return change((c) => { c.saves[i] = !c.saves[i]; });
+      case 'save': {
+        const c = ch();
+        if (!c.saves[i]) {
+          const left = saveCount(c) - c.saves.filter((u, j) => u && j < saveCount(c)).length;
+          if (!confirm(`Rettungswurf verbrauchen? Danach ${left - 1 === 1 ? 'bleibt 1 Rettungswurf' : `bleiben ${left - 1} Rettungswürfe`} übrig.`)) return;
+        } else if (!confirm('Rettungswurf wieder freigeben?')) return;
+        return change((c) => { c.saves[i] = !c.saves[i]; });
+      }
       case 'pickAttr': return pickAttr(i);
       case 'pickClass': return pickClass(i);
       case 'catalog': return catalog();
