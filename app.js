@@ -310,8 +310,8 @@
         <input class="item-note" data-item="note" data-list="${list}" data-i="${i}" value="${esc(it.note)}" placeholder="Notiz">
         <div class="item-adj">
           <input type="text" inputmode="numeric" class="adj-amt" placeholder="Menge" aria-label="Menge zum Hinzufügen oder Wegnehmen">
-          <button class="btn small" data-act="adjQty" data-d="1" data-list="${list}" data-i="${i}">+ dazu</button>
-          <button class="btn small" data-act="adjQty" data-d="-1" data-list="${list}" data-i="${i}">− weg</button>
+          <button class="btn small" data-act="adjQty" data-d="1" data-list="${list}" data-i="${i}" aria-label="Menge hinzufügen">+</button>
+          <button class="btn small" data-act="adjQty" data-d="-1" data-list="${list}" data-i="${i}" aria-label="Menge wegnehmen">−</button>
         </div>
         <div class="item-actions">
           <button class="link" data-act="equip" data-list="${list}" data-i="${i}">anlegen</button>
