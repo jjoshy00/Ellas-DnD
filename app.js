@@ -167,7 +167,7 @@
     const used = c.attrSlots.filter((s) => s.skill).length;
     return `
     <section class="card">
-      <h2>Levelpunkte <small>Attributfähigkeiten ${used}/10</small></h2>
+      <h2>Levelpunkte <span class="row"><small>Attributfähigkeiten ${used}/10</small><button class="btn small" data-act="attrCatalog">Katalog</button></span></h2>
       ${c.attrSlots.map((s, i) => {
         const info = attrInfo[s.skill];
         if (!s.skill) return `<div class="slot empty"><span class="dot" style="background:var(--line)"></span><button class="name btn small" style="text-align:left" data-act="pickAttr" data-i="${i}">+ Fähigkeit wählen</button></div>`;
@@ -414,6 +414,8 @@
       if (b) onClick(b.dataset.dAct, b, e);
     };
     if (!dlg.open) dlg.showModal();
+    dlg.scrollTop = 0;
+    requestAnimationFrame(() => { dlg.scrollTop = 0; });
   }
 
   function pickAttr(i) {
@@ -464,6 +466,22 @@
   }
 
   // Katalog aller Klassen, Unterklassen und Fähigkeiten.
+  // Katalog aller Attributfähigkeiten mit Erklärung und eigenem Stand.
+  function attrCatalog() {
+    const c = ch();
+    openDialog(`<h3>Katalog der Attributfähigkeiten</h3>
+      <p class="hint">Je Farbe ist die unterste Fähigkeit erst skillbar, wenn die anderen fünf mindestens Stufe 1 haben. Höchstens 10 Fähigkeiten pro Charakter.</p>
+      ${R.attributeGroups.map((g) => `<div class="cat" style="border-left:6px solid ${g.color}">
+        ${g.skills.map(([n, d], i) => {
+          const have = c.attrSlots.find((x) => x.skill === n);
+          const last = i === g.skills.length - 1;
+          const lock = last && lockedReason(c, n);
+          return `<div class="cat-s${last ? ' cat-last' : ''}"><b>${esc(n)}${have ? ` <span class="tag">Stufe ${have.stufe}</span>` : ''}${last ? ` <span class="tag">${lock ? '🔒 gesperrt' : 'freigeschaltet'}</span>` : ''}</b><small>${esc(d)}</small></div>`;
+        }).join('')}</div>`).join('')}
+      <div class="row end"><button class="btn" data-d-act="close">Schließen</button></div>`,
+    () => dlg.close());
+  }
+
   function catalog(klass) {
     const c = ch();
     klass = klass || c.klass;
@@ -629,6 +647,7 @@
       case 'pickAttr': return pickAttr(i);
       case 'pickClass': return pickClass(i);
       case 'catalog': return catalog();
+      case 'attrCatalog': return attrCatalog();
       case 'attrStufe': {
         const s = ch().attrSlots[i];
         if (d > 0 && lockedReason(ch(), s.skill)) return alert(lockedReason(ch(), s.skill));
