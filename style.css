@@ -117,8 +117,6 @@ textarea { resize: vertical; min-height: 90px; }
 .bar { height: 6px; border-radius: 3px; background: var(--line); overflow: hidden; margin-top: 6px; }
 .bar i { display: block; height: 100%; background: var(--c); }
 
-.item { display: grid; grid-template-columns: 1fr 70px 36px; gap: 6px; align-items: center; padding: 6px 0; border-bottom: 1px solid var(--line); }
-.item .note { grid-column: 1 / -1; font-size: .85rem; }
 
 dialog {
   border: 0; border-radius: 16px; padding: 16px; width: min(92vw, 480px);
@@ -152,5 +150,27 @@ dialog h3 { margin: 0 0 10px; color: var(--c); }
 .cat-s small { color: var(--muted); font-size: .8rem; display: block; }
 .card h2 .row { gap: 6px; flex-wrap: nowrap; }
 
-.item .move { grid-column: 1 / -1; justify-self: end; }
-.item.empty-slot { display: block; color: var(--muted); font-style: italic; font-size: .85rem; border: 1px dashed var(--line); border-radius: 8px; padding: 10px; margin: 6px 0; }
+
+/* Inventar: jeder Eintrag als eigene Karte */
+.item {
+  border: 1px solid var(--line); border-left: 5px solid var(--c); border-radius: 10px;
+  background: var(--bg); padding: 8px 10px; margin: 0 0 10px;
+}
+.item.free { border-left-color: var(--muted); }
+.item-top { display: flex; gap: 8px; align-items: center; }
+.item-no {
+  flex: none; width: 24px; height: 24px; border-radius: 50%; background: var(--c); color: #fff;
+  font-size: .75rem; font-weight: 700; display: inline-flex; align-items: center; justify-content: center;
+}
+.item-name { flex: 1; font-weight: 600; font-size: 1rem; background: var(--paper); }
+.item-qty { flex: none; display: flex; align-items: center; gap: 2px; color: var(--muted); font-size: .9rem; }
+.item-qty input { width: 56px; text-align: center; background: var(--paper); }
+.item-note { width: 100%; margin-top: 6px; font-size: .85rem; padding: 6px 8px; background: var(--paper); }
+.item-actions { display: flex; justify-content: space-between; margin-top: 6px; }
+.link { border: 0; background: none; padding: 4px 2px; color: var(--c); font-size: .82rem; }
+.link.danger { color: #b3261e; }
+.item.empty-slot {
+  display: flex; align-items: center; gap: 8px; border-style: dashed; border-left-width: 1px;
+  background: none; color: var(--muted); font-style: italic; font-size: .85rem;
+}
+.item.empty-slot .item-no { background: var(--line); color: var(--muted); font-style: normal; }

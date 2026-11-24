@@ -288,12 +288,17 @@
   // Inventar: begrenzte Slots (3 + Traglast + Ausbau), dazu eine Liste ohne Slot.
   const slotMax = (c) => R.inventorySlots + attrStufe(c, 'Traglast') + num(c.slotExtra);
   function itemRows(c, list) {
-    return (c[list] || []).map((it, i) => `<div class="item">
-        <input data-item="name" data-list="${list}" data-i="${i}" value="${esc(it.name)}" placeholder="Gegenstand">
-        <input type="number" inputmode="numeric" data-item="qty" data-list="${list}" data-i="${i}" value="${num(it.qty, 1)}" aria-label="Anzahl">
-        <button class="btn small danger" data-act="delItem" data-list="${list}" data-i="${i}" aria-label="Entfernen">×</button>
-        <input class="note" data-item="note" data-list="${list}" data-i="${i}" value="${esc(it.note)}" placeholder="Notiz">
-        <button class="btn small move" data-act="moveItem" data-list="${list}" data-i="${i}">${list === 'items' ? '→ ohne Slot' : '→ in einen Slot'}</button></div>`).join('');
+    return (c[list] || []).map((it, i) => `<div class="item${list === 'freeItems' ? ' free' : ''}">
+        <div class="item-top">
+          ${list === 'items' ? `<span class="item-no">${i + 1}</span>` : ''}
+          <input class="item-name" data-item="name" data-list="${list}" data-i="${i}" value="${esc(it.name)}" placeholder="Gegenstand">
+          <label class="item-qty">×<input type="number" inputmode="numeric" data-item="qty" data-list="${list}" data-i="${i}" value="${num(it.qty, 1)}" aria-label="Anzahl"></label>
+        </div>
+        <input class="item-note" data-item="note" data-list="${list}" data-i="${i}" value="${esc(it.note)}" placeholder="Notiz">
+        <div class="item-actions">
+          <button class="link" data-act="moveItem" data-list="${list}" data-i="${i}">${list === 'items' ? '→ ohne Slot' : '→ in einen Slot'}</button>
+          <button class="link danger" data-act="delItem" data-list="${list}" data-i="${i}">Entfernen</button>
+        </div></div>`).join('');
   }
   function inventar(c) {
     const max = slotMax(c), used = c.items.length, tl = attrStufe(c, 'Traglast');
@@ -302,7 +307,7 @@
     <section class="card">
       <h2>Inventar <small>${used} / ${max} Slots</small></h2>
       ${itemRows(c, 'items')}
-      ${Array.from({ length: Math.max(0, max - used) }, () => '<div class="item empty-slot">freier Slot</div>').join('')}
+      ${Array.from({ length: Math.max(0, max - used) }, (_, k) => `<div class="item empty-slot"><span class="item-no">${used + k + 1}</span>freier Slot</div>`).join('')}
       ${used > max ? `<p class="warn">${used - max} Gegenstand/Gegenstände mehr als Slots.</p>` : ''}
       <div class="row" style="margin-top:10px">
         <span class="grow hint" style="margin:0">Slots: ${R.inventorySlots} Grund${tl ? ` + ${tl} Traglast` : ''} + Ausbau ${num(c.slotExtra)}</span>
