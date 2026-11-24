@@ -135,12 +135,7 @@
       <label class="f">Nachteil<input data-bind="nachteil" value="${esc(c.nachteil)}" placeholder="Notiz"></label>
     </section>
 
-    <section class="card">
-      <h2>Geld</h2>
-      <div class="money">
-        ${['g', 's', 'k'].map((m) => `<label>${{ g: 'Gold', s: 'Silber', k: 'Kupfer' }[m]}<input type="number" inputmode="numeric" data-money="${m}" value="${num(c.money[m])}"></label>`).join('')}
-      </div>
-    </section>
+    ${moneyCard(c)}
 
     <section class="card">
       <h2>Grundwerte <small>für Korrekturen</small></h2>
@@ -252,12 +247,46 @@
     </section>`;
   }
 
+  // Geld: Bestand anzeigen, Beträge über Felder mit + / − buchen, letzte 10 Buchungen merken.
+  const COINS = [['g', 'Gold'], ['s', 'Silber'], ['k', 'Kupfer']];
+  const coinText = (o) => COINS.filter(([m]) => num(o[m])).map(([m, n]) => `${num(o[m])} ${n}`).join(', ') || '0';
+  function moneyCard(c) {
+    const log = c.moneyLog || [];
+    return `<section class="card">
+      <h2>Geld</h2>
+      <div class="money">${COINS.map(([m, n]) => `<div class="stat"><div class="lbl">${n}</div><div class="val">${num(c.money[m])}</div></div>`).join('')}</div>
+      <div class="money" style="margin-top:10px">${COINS.map(([m, n]) => `<label>${n}<input type="text" inputmode="numeric" pattern="[0-9]*" data-tx="${m}" placeholder="0" aria-label="${n} buchen"></label>`).join('')}</div>
+      <label class="f" style="margin-top:8px">Anmerkung (optional)<input data-tx="note" placeholder="z. B. Brot gekauft"></label>
+      <div class="row">
+        <button class="btn grow" data-act="tx" data-d="-1">− Ausgeben</button>
+        <button class="btn fill grow" data-act="tx" data-d="1">+ Einnehmen</button>
+      </div>
+      ${log.length ? `<div class="group-h" style="margin-top:12px">Letzte Buchungen</div>${log.map((t) => `<div class="tx">
+        <span class="${t.d > 0 ? 'plus' : 'minus'}">${t.d > 0 ? '+' : '−'} ${esc(coinText(t))}</span>
+        <small>${esc(t.when)}${t.note ? ' · ' + esc(t.note) : ''}</small></div>`).join('')}` : ''}
+    </section>`;
+  }
+  function booking(d, btn) {
+    const box = btn.closest('.card');
+    const field = (m) => box.querySelector(`[data-tx="${m}"]`);
+    const amt = {};
+    COINS.forEach(([m]) => { amt[m] = Math.max(0, num(field(m).value.replace(/\D/g, ''))); });
+    if (!COINS.some(([m]) => amt[m])) return alert('Bitte einen Betrag eintragen.');
+    const c = ch();
+    const after = COINS.map(([m, n]) => [n, num(c.money[m]) + d * amt[m]]);
+    const short = after.filter(([, v]) => v < 0);
+    if (short.length && !confirm(`Dafür reicht es nicht: ${short.map(([n, v]) => `${n} ${v}`).join(', ')}.\n\nTrotzdem buchen?`)) return;
+    const note = field('note').value.trim();
+    change((c) => {
+      COINS.forEach(([m]) => { c.money[m] = num(c.money[m]) + d * amt[m]; });
+      const when = new Date().toLocaleString('de-DE', { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' });
+      c.moneyLog = [{ d, ...amt, note, when }, ...(c.moneyLog || [])].slice(0, 10);
+    });
+  }
+
   function inventar(c) {
     return `
-    <section class="card">
-      <h2>Geld</h2>
-      <div class="money">${['g', 's', 'k'].map((m) => `<label>${{ g: 'Gold', s: 'Silber', k: 'Kupfer' }[m]}<input type="number" inputmode="numeric" data-money="${m}" value="${num(c.money[m])}"></label>`).join('')}</div>
-    </section>
+    ${moneyCard(c)}
     <section class="card">
       <h2>Inventar <small>${c.items.length} Einträge${attrStufe(c, 'Traglast') ? ` · Traglast +${attrStufe(c, 'Traglast')} Plätze` : ''}</small></h2>
       ${c.items.map((it, i) => `<div class="item">
@@ -412,7 +441,6 @@
     const t = e.target, c = ch();
     if (t.dataset.bind && t.tagName !== 'SELECT') { c[t.dataset.bind] = t.value; save(); if (t.dataset.bind === 'name') applyTheme(); }
     else if (t.dataset.bindn) { c[t.dataset.bindn] = num(t.value); save(); }
-    else if (t.dataset.money) { c.money[t.dataset.money] = num(t.value); save(); }
     else if (t.dataset.item) { const it = c.items[num(t.dataset.i)]; it[t.dataset.item] = t.dataset.item === 'qty' ? num(t.value, 1) : t.value; save(); }
   });
   view.addEventListener('change', (e) => {
@@ -461,6 +489,7 @@
       });
       case 'addItem': return change((c) => { c.items.push({ name: '', qty: 1, note: '' }); });
       case 'delItem': return change((c) => { c.items.splice(i, 1); });
+      case 'tx': return booking(d, b);
       case 'export': return exportFile();
     }
   });

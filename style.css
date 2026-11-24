@@ -134,3 +134,11 @@ dialog h3 { margin: 0 0 10px; color: var(--c); }
 .aspect-pick label { border: 1px solid var(--line); border-radius: 999px; padding: 4px 10px; font-size: .85rem; }
 .aspect-pick input { margin-right: 4px; accent-color: var(--c); }
 .char-list .choice.on { border-color: var(--c); border-width: 2px; }
+
+.money .stat { padding: 6px; }
+.money .stat .val { font-size: 1.3rem; }
+.tx { display: flex; flex-direction: column; padding: 6px 0; border-bottom: 1px solid var(--line); }
+.tx:last-child { border-bottom: 0; }
+.tx .plus { color: #1b7f3b; font-weight: 600; }
+.tx .minus { color: #b3261e; font-weight: 600; }
+.tx small { color: var(--muted); font-size: .78rem; }
