@@ -1,0 +1,35 @@
+<!doctype html>
+<html lang="de">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <title>Charakterbogen</title>
+  <meta name="theme-color" content="#8e3fa0">
+  <link rel="manifest" href="manifest.webmanifest">
+  <link rel="icon" href="icons/icon-192.png">
+  <link rel="apple-touch-icon" href="icons/icon-192.png">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+  <header class="top">
+    <button class="icon-btn" id="btn-chars" aria-label="Charaktere">☰</button>
+    <div class="banner"><span id="title">Charakterbogen</span><small id="subtitle"></small></div>
+    <span class="icon-btn" aria-hidden="true"></span>
+  </header>
+  <main id="view"></main>
+  <nav class="tabs" id="tabs">
+    <button data-tab="bogen">Bogen</button>
+    <button data-tab="faehigkeiten">Fähigkeiten</button>
+    <button data-tab="techniken">Techniken</button>
+    <button data-tab="inventar">Inventar</button>
+    <button data-tab="notizen">Notizen</button>
+  </nav>
+  <dialog id="dlg"></dialog>
+  <script src="data.js"></script>
+  <script src="app.js"></script>
+  <script>
+    if ('serviceWorker' in navigator) navigator.serviceWorker.register('sw.js').catch(() => {});
+  </script>
+</body>
+</html>
