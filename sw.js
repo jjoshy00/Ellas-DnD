@@ -1,6 +1,6 @@
 // Offline-Speicher: alle Dateien werden beim ersten Öffnen abgelegt.
 // Bei jeder neuen Fassung VERSION erhöhen, damit Handys die neuen Dateien holen.
-const VERSION = 'v5';
+const VERSION = 'v6';
 const FILES = ['./', 'index.html', 'style.css', 'data.js', 'app.js', 'manifest.webmanifest', 'icons/icon-192.png', 'icons/icon-512.png'];
 
 self.addEventListener('install', (e) => {

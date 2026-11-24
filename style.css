@@ -151,3 +151,6 @@ dialog h3 { margin: 0 0 10px; color: var(--c); }
 .cat-s b { display: block; font-size: .9rem; }
 .cat-s small { color: var(--muted); font-size: .8rem; display: block; }
 .card h2 .row { gap: 6px; flex-wrap: nowrap; }
+
+.item .move { grid-column: 1 / -1; justify-self: end; }
+.item.empty-slot { display: block; color: var(--muted); font-style: italic; font-size: .85rem; border: 1px dashed var(--line); border-radius: 8px; padding: 10px; margin: 6px 0; }

@@ -17,7 +17,7 @@
       money: { g: 0, s: 0, k: 0 },
       attrSlots: Array.from({ length: 10 }, () => ({ skill: '', stufe: 0, check: false })),
       classSlots: Array.from({ length: 10 }, () => ({ name: '', text: '', stufe: 0, check: false })),
-      aspects: {}, techniques: {}, items: [], notes: '',
+      aspects: {}, techniques: {}, items: [], freeItems: [], slotExtra: 0, notes: '',
     };
   }
   function hicks() {
@@ -285,17 +285,37 @@
     });
   }
 
+  // Inventar: begrenzte Slots (3 + Traglast + Ausbau), dazu eine Liste ohne Slot.
+  const slotMax = (c) => R.inventorySlots + attrStufe(c, 'Traglast') + num(c.slotExtra);
+  function itemRows(c, list) {
+    return (c[list] || []).map((it, i) => `<div class="item">
+        <input data-item="name" data-list="${list}" data-i="${i}" value="${esc(it.name)}" placeholder="Gegenstand">
+        <input type="number" inputmode="numeric" data-item="qty" data-list="${list}" data-i="${i}" value="${num(it.qty, 1)}" aria-label="Anzahl">
+        <button class="btn small danger" data-act="delItem" data-list="${list}" data-i="${i}" aria-label="Entfernen">×</button>
+        <input class="note" data-item="note" data-list="${list}" data-i="${i}" value="${esc(it.note)}" placeholder="Notiz">
+        <button class="btn small move" data-act="moveItem" data-list="${list}" data-i="${i}">${list === 'items' ? '→ ohne Slot' : '→ in einen Slot'}</button></div>`).join('');
+  }
   function inventar(c) {
+    const max = slotMax(c), used = c.items.length, tl = attrStufe(c, 'Traglast');
     return `
     ${moneyCard(c)}
     <section class="card">
-      <h2>Inventar <small>${c.items.length} Einträge${attrStufe(c, 'Traglast') ? ` · Traglast +${attrStufe(c, 'Traglast')} Plätze` : ''}</small></h2>
-      ${c.items.map((it, i) => `<div class="item">
-        <input data-item="name" data-i="${i}" value="${esc(it.name)}" placeholder="Gegenstand">
-        <input type="number" inputmode="numeric" data-item="qty" data-i="${i}" value="${num(it.qty, 1)}" aria-label="Anzahl">
-        <button class="btn small danger" data-act="delItem" data-i="${i}" aria-label="Entfernen">×</button>
-        <input class="note" data-item="note" data-i="${i}" value="${esc(it.note)}" placeholder="Notiz"></div>`).join('')}
-      <div class="row end" style="margin-top:10px"><button class="btn fill" data-act="addItem">+ Gegenstand</button></div>
+      <h2>Inventar <small>${used} / ${max} Slots</small></h2>
+      ${itemRows(c, 'items')}
+      ${Array.from({ length: Math.max(0, max - used) }, () => '<div class="item empty-slot">freier Slot</div>').join('')}
+      ${used > max ? `<p class="warn">${used - max} Gegenstand/Gegenstände mehr als Slots.</p>` : ''}
+      <div class="row" style="margin-top:10px">
+        <span class="grow hint" style="margin:0">Slots: ${R.inventorySlots} Grund${tl ? ` + ${tl} Traglast` : ''} + Ausbau ${num(c.slotExtra)}</span>
+        <button class="btn small" data-act="slotExtra" data-d="-1" aria-label="Ausbau verringern">−</button>
+        <button class="btn small" data-act="slotExtra" data-d="1" aria-label="Slot ausbauen">+</button>
+      </div>
+      <div class="row end" style="margin-top:10px"><button class="btn fill" data-act="addItem" data-list="items"${used >= max ? ' disabled' : ''}>+ Gegenstand</button></div>
+    </section>
+    <section class="card">
+      <h2>Ohne Inventarslot <small>${(c.freeItems || []).length} Einträge</small></h2>
+      <p class="hint" style="margin-top:0">Für Gegenstände, die keinen Slot belegen (z. B. am Körper getragen).</p>
+      ${itemRows(c, 'freeItems')}
+      <div class="row end" style="margin-top:10px"><button class="btn fill" data-act="addItem" data-list="freeItems">+ Gegenstand</button></div>
     </section>`;
   }
 
@@ -472,7 +492,7 @@
     const t = e.target, c = ch();
     if (t.dataset.bind && t.tagName !== 'SELECT') { c[t.dataset.bind] = t.value; save(); if (t.dataset.bind === 'name') applyTheme(); }
     else if (t.dataset.bindn) { c[t.dataset.bindn] = num(t.value); save(); }
-    else if (t.dataset.item) { const it = c.items[num(t.dataset.i)]; it[t.dataset.item] = t.dataset.item === 'qty' ? num(t.value, 1) : t.value; save(); }
+    else if (t.dataset.item) { const it = (c[t.dataset.list] || c.items)[num(t.dataset.i)]; it[t.dataset.item] = t.dataset.item === 'qty' ? num(t.value, 1) : t.value; save(); }
   });
   view.addEventListener('change', (e) => {
     const t = e.target;
@@ -519,8 +539,22 @@
         const need = t && techNeed(t);
         if (need && t.punkte >= need) { t.punkte -= need; t.stufe += 1; }
       });
-      case 'addItem': return change((c) => { c.items.push({ name: '', qty: 1, note: '' }); });
-      case 'delItem': return change((c) => { c.items.splice(i, 1); });
+      case 'addItem': {
+        const list = b.dataset.list || 'items';
+        if (list === 'items' && ch().items.length >= slotMax(ch())) return alert('Alle Inventarslots sind belegt. Baue einen Slot aus oder lege den Gegenstand in „Ohne Inventarslot“.');
+        return change((c) => { (c[list] ||= []).push({ name: '', qty: 1, note: '' }); });
+      }
+      case 'delItem': {
+        const list = b.dataset.list || 'items', it = ch()[list][i];
+        if (it && it.name && !confirm(`„${it.name}“ entfernen?`)) return;
+        return change((c) => { c[list].splice(i, 1); });
+      }
+      case 'moveItem': {
+        const from = b.dataset.list, to = from === 'items' ? 'freeItems' : 'items';
+        if (to === 'items' && ch().items.length >= slotMax(ch())) return alert('Kein freier Inventarslot.');
+        return change((c) => { (c[to] ||= []).push(...c[from].splice(i, 1)); });
+      }
+      case 'slotExtra': return change((c) => { c.slotExtra = Math.max(0, num(c.slotExtra) + d); });
       case 'tx': return booking(d, b);
       case 'export': return exportFile();
     }

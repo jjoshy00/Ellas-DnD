@@ -5,6 +5,7 @@ window.RULES = {
   startLP: 50,
   lpPerLevel: 1,
   resourcePerLevel: 1,
+  inventorySlots: 3,   // Grund-Inventarslots, + 1 je Stufe Traglast, + Ausbau
 
   classes: {
     zauberer: { name: 'Zauberer', resource: 'Mana', color: '#8e3fa0', light: '#efe0f3' },
