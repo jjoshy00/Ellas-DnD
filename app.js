@@ -606,7 +606,16 @@
     switch (b.dataset.act) {
       case 'lp': return change((c) => { const m = lpMax(c); c.lpCur = Math.max(0, Math.min(m, cur(c.lpCur, m) + d)); });
       case 'res': return change((c) => { const m = resMax(c); c.resCur = Math.max(0, Math.min(m, cur(c.resCur, m) + d)); });
-      case 'level': return change((c) => { c.level = Math.max(0, c.level + d); });
+      case 'level': {
+        const c = ch(), to = c.level + d;
+        if (to < 0) return;
+        const res = klassOf(c).resource;
+        const q = d > 0
+          ? `Levelaufstieg auf Level ${to}?\n\nDadurch: +${R.lpPerLevel} LP, +${R.resourcePerLevel} ${res} und 1 Punkt zum Verteilen (ATK, DEF oder Attributfähigkeit).`
+          : `Level wirklich auf ${to} senken?\n\nDadurch: −${R.lpPerLevel} LP, −${R.resourcePerLevel} ${res} und 1 Punkt weniger zum Verteilen.`;
+        if (!confirm(q)) return;
+        return change((c) => { c.level = to; });
+      }
       case 'atk': if (!pointOk(d)) return; return change((c) => { c.atk = Math.max(0, c.atk + d); });
       case 'def': if (!pointOk(d)) return; return change((c) => { c.def = Math.max(0, c.def + d); });
       case 'save': {
