@@ -1,6 +1,6 @@
 // Offline-Speicher: alle Dateien werden beim ersten Öffnen abgelegt.
 // Bei jeder neuen Fassung VERSION erhöhen, damit Handys die neuen Dateien holen.
-const VERSION = 'v11';
+const VERSION = 'v12';
 const FILES = ['./', 'index.html', 'style.css', 'data.js', 'app.js', 'manifest.webmanifest', 'icons/icon-192.png', 'icons/icon-512.png'];
 
 self.addEventListener('install', (e) => {
@@ -13,7 +13,8 @@ self.addEventListener('activate', (e) => {
 self.addEventListener('fetch', (e) => {
   if (e.request.method !== 'GET' || !e.request.url.startsWith(self.location.origin)) return;
   e.respondWith(
-    fetch(e.request).then((res) => {
+    // no-cache: beim Server nachfragen, ob es eine neuere Fassung gibt (nicht den Browser-Zwischenspeicher nehmen)
+    fetch(e.request, { cache: 'no-cache' }).then((res) => {
       const copy = res.clone();
       caches.open(VERSION).then((c) => c.put(e.request, copy));
       return res;

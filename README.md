@@ -13,4 +13,4 @@ Läuft komplett im Browser, ohne Server. Die Daten bleiben nur auf dem jeweilige
 
 ## Regeln anpassen
 Alle Regelwerte (Klassen, Fähigkeiten, Kreise, Punktetabellen) stehen in `data.js`.
-Nach einer Änderung in `sw.js` die `VERSION` erhöhen, damit die Handys die neue Fassung laden.
+Nach einer Änderung in `sw.js` die `VERSION` und in `index.html` die Zahl hinter `?v=` erhöhen.

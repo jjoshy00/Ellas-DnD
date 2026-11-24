@@ -798,7 +798,8 @@
     let t = $('#toast');
     if (!t) { t = document.createElement('div'); t.id = 'toast'; document.body.appendChild(t); }
     t.textContent = msg; t.classList.add('on');
-    clearTimeout(t._h); t._h = setTimeout(() => t.classList.remove('on'), 3500);
+    try { sessionStorage.setItem('cb-toast', msg); } catch (e) { /* egal */ }
+    clearTimeout(t._h); t._h = setTimeout(() => { t.classList.remove('on'); try { sessionStorage.removeItem('cb-toast'); } catch (e) { /* egal */ } }, 3500);
   }
 
   // auto = beim Laden der Seite: kein Einrichtungsdialog, Fehler nur als kurzer Hinweis.
@@ -914,6 +915,8 @@
   let skip = false;
   try { skip = sessionStorage.getItem('cb-synced') === '1'; sessionStorage.removeItem('cb-synced'); } catch (e) { /* egal */ }
   if (!skip) setTimeout(() => sync(true), 300);
+  // Meldung, die vor dem Neuladen nicht mehr zu sehen war (z. B. nach ⟳), noch einmal zeigen.
+  try { const m = sessionStorage.getItem('cb-toast'); if (m) setTimeout(() => toast(m), 200); } catch (e) { /* egal */ }
   // Kommt die installierte App aus dem Hintergrund zurück, ebenfalls abgleichen.
   let hiddenAt = 0;
   document.addEventListener('visibilitychange', () => {
