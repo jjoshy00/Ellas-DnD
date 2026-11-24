@@ -297,9 +297,14 @@
         <div class="item-top">
           ${list === 'items' ? `<span class="item-no">${i + 1}</span>` : ''}
           <input class="item-name" data-item="name" data-list="${list}" data-i="${i}" value="${esc(it.name)}" placeholder="Gegenstand">
-          <label class="item-qty">×<input type="number" inputmode="numeric" data-item="qty" data-list="${list}" data-i="${i}" value="${num(it.qty, 1)}" aria-label="Anzahl"></label>
+          <label class="item-qty">×<input type="text" inputmode="numeric" data-item="qty" data-list="${list}" data-i="${i}" value="${num(it.qty, 1)}" aria-label="Anzahl"></label>
         </div>
         <input class="item-note" data-item="note" data-list="${list}" data-i="${i}" value="${esc(it.note)}" placeholder="Notiz">
+        <div class="item-adj">
+          <input type="text" inputmode="numeric" class="adj-amt" placeholder="Menge" aria-label="Menge zum Hinzufügen oder Wegnehmen">
+          <button class="btn small" data-act="adjQty" data-d="1" data-list="${list}" data-i="${i}">+ dazu</button>
+          <button class="btn small" data-act="adjQty" data-d="-1" data-list="${list}" data-i="${i}">− weg</button>
+        </div>
         <div class="item-actions">
           <button class="link" data-act="equip" data-list="${list}" data-i="${i}">anlegen</button>
           <button class="link" data-act="moveItem" data-list="${list}" data-i="${i}">${list === 'items' ? '→ ohne Slot' : '→ in einen Slot'}</button>
@@ -651,6 +656,18 @@
           return change((c) => { const it = c.equip[i].item; c.equip[i].item = null; delete it.from; (c.freeItems ||= []).push(it); });
         }
         return change((c) => { const it = c.equip[i].item; c.equip[i].item = null; delete it.from; c.items.push(it); });
+      }
+      case 'adjQty': {
+        const list = b.dataset.list, it = ch()[list][i];
+        const amt = num(b.closest('.item').querySelector('.adj-amt').value.replace(/\D/g, ''));
+        if (!amt) return alert('Bitte eine Menge eintragen.');
+        const left = num(it.qty, 1) + d * amt;
+        if (left < 0) return alert(`So viele sind nicht da (nur ${num(it.qty, 1)}).`);
+        if (left === 0) {
+          if (!confirm(`Danach ist nichts mehr von „${it.name || 'Gegenstand'}“ übrig. Eintrag entfernen?`)) return;
+          return change((c) => { c[list].splice(i, 1); });
+        }
+        return change((c) => { c[list][i].qty = left; });
       }
       case 'slotExtra': return change((c) => { c.slotExtra = Math.max(0, num(c.slotExtra) + d); });
       case 'tx': return booking(d, b);

@@ -196,3 +196,6 @@ dialog h3 { margin: 0 0 10px; color: var(--c); }
 .choice.on { border: 2px solid var(--c); background: var(--cl); }
 .steps { padding-left: 20px; font-size: .9rem; }
 .steps li { margin-bottom: 6px; }
+
+.item-adj { display: flex; gap: 6px; justify-content: flex-end; align-items: center; margin-top: 6px; }
+.item-adj .adj-amt { width: 72px; padding: 4px 8px; font-size: .85rem; text-align: center; background: var(--paper); }
