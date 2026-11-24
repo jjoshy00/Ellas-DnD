@@ -206,3 +206,11 @@ dialog h3 { margin: 0 0 10px; color: var(--c); }
 svg.align { width: 100%; max-width: 420px; display: block; margin: 0 auto; }
 svg.align .al-sub { font-size: 10px; font-weight: 700; fill: var(--c); }
 svg.align .al-ax { font-size: 10px; fill: var(--muted); }
+
+.pa { margin-top: 8px; }
+.pa-row { display: flex; align-items: center; gap: 6px; padding: 5px 0; border-bottom: 1px solid var(--line); font-size: .9rem; }
+.pa-row .btn.small, .pa-row .tag { min-width: 44px; text-align: center; }
+.pa-head { border-bottom: 0; color: var(--muted); font-size: .72rem; }
+.pa-head span:not(.grow) { min-width: 44px; text-align: center; }
+details summary { cursor: pointer; color: var(--c); font-size: .9rem; margin-top: 6px; }
+.lvl-box { width: 36px; height: 36px; line-height: 32px; text-align: center; font-weight: 700; font-size: 1.1rem; color: var(--c); border: 2px solid var(--ink); border-radius: 4px; }

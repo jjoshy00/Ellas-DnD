@@ -18,6 +18,18 @@ window.RULES = {
     { from: 25, lp: 3, res: 3, attr: 2 },
     { from: 30, lp: 3, res: 3, attr: 3 },
   ],
+  // Bepunktete Aktionen: [Name, Punkte regulär, Punkte besonders]
+  pointActions: [
+    ['Angriff', 1, 2],
+    ['Verteidigung', 1, 2],
+    ['Ausprobieren (geht gut aus)', 2, 3],
+    ['Ausprobieren (geht schlecht aus)', 2, 3],
+    ['Redegewandtheit', 2, 3],
+    ['Item kreativ eingesetzt', 2, 2],
+    ['Sorgt dafür, dass die DM den Kopf auf den Tisch klopfen will', 1, 2],
+    ['Erfindet etwas (Zauber/Objekt)', 3, 3],
+  ],
+  guildMax: 10,   // Abenteurergilde: Stufe 0–10
   // Laufzettel der DM (Google-Tabelle): rote Zahl = Position auf dem Ausrichtungs-Chart, Summe = Punkte.
   laufzettel: { sheetId: '1Bucq40p-VDb47HDRdqjeQQpJTg0EFQ1WSLrpbkA1arA', grid: 15, region: 5 },
   inventorySlots: 3,   // Grund-Inventarslots, + 1 je Stufe Traglast, + Ausbau

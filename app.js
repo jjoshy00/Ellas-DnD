@@ -37,7 +37,11 @@
   }
   // Einträge in Listen bekommen eine feste Kennung, damit der Abgleich sie zuordnen kann.
   function withIds(st) {
-    (st.chars || []).forEach((c) => { if (c.laufName === undefined && String(c.name).trim().toLowerCase() === 'hicks') c.laufName = 'Joshua'; });
+    (st.chars || []).forEach((c) => {
+      if (c.laufName === undefined && String(c.name).trim().toLowerCase() === 'hicks') c.laufName = 'Joshua';
+      if (c.points === undefined) c.points = c.level > 0 ? R.levelPoints[Math.min(c.level, R.levelPoints.length) - 1] : 0;
+      if (c.guild === undefined) c.guild = 0;
+    });
     (st.chars || []).forEach((c) => ['items', 'freeItems'].forEach((l) => (c[l] || []).forEach((it) => { it.id ||= uid(); })));
     return st;
   }
@@ -136,8 +140,8 @@
     <section class="stats">
       ${stat('Lebenspunkte', cur(c.lpCur, lm), lm, 'lp')}
       ${stat(k.resource, cur(c.resCur, rm), rm, 'res')}
-      ${lz ? `<div class="stat"><div class="lbl">Level</div><div class="val">${c.level}</div>
-        <div class="hint" style="margin:0">${lz.points} Punkte${R.levelPoints[c.level] !== undefined ? ` · nächstes ab ${R.levelPoints[c.level]}` : ''}</div></div>` : stat('Level', c.level, undefined, 'level')}
+      <div class="stat"><div class="lbl">Level</div><div class="val">${c.level}</div>
+        <div class="hint" style="margin:0">${pointsOf(c)} Punkte${R.levelPoints[c.level] !== undefined ? ` · nächstes ab ${R.levelPoints[c.level]}` : ''}</div></div>
       <div class="stat"><div class="lbl">Punkte zu verteilen</div><div class="val">${free}</div>
         <div class="hint" style="margin:4px 0 0">für ATK, DEF oder Attributfähigkeit</div></div>
       ${stat('ATK', c.atk + gearBonus(c, 'atk'), undefined, 'atk', gearBonus(c, 'atk') ? `${c.atk} geskillt ${gearBonus(c, 'atk') > 0 ? '+' : '−'} ${Math.abs(gearBonus(c, 'atk'))} Ausrüstung` : '')}
@@ -145,6 +149,7 @@
     </section>
     ${free < 0 ? '<p class="warn">Es sind mehr Punkte verteilt, als das Level hergibt.</p>' : ''}
 
+    ${pointsCard(c)}
     ${alignCard(c)}
     <section class="card" style="margin-top:12px">
       <h2>Rettungswürfe <small>${n - c.saves.filter((_, i) => i < n && c.saves[i]).length} übrig</small></h2>
@@ -487,6 +492,53 @@
     }
   }
   // Werte aus dem Laufzettel in die Charaktere übernehmen (Level aus Punkten, Ausrichtung aus der Position).
+  // ---------- Punkte, Level, Abenteurergilde ----------
+  const pointsOf = (c) => (c.lauf ? c.lauf.points : num(c.points));
+  function pointsCard(c) {
+    const p = pointsOf(c), lv = c.level, from = lv > 0 ? R.levelPoints[lv - 1] : 0, next = R.levelPoints[lv];
+    const pct = next === undefined ? 100 : Math.max(0, Math.min(100, ((p - from) / (next - from)) * 100));
+    const actions = `<div class="pa"><div class="pa-row pa-head"><span class="grow"></span><span>regulär</span><span>besonders</span></div>${R.pointActions.map(([n, a, b], i) => `<div class="pa-row"><span class="grow">${esc(n)}</span>
+        ${c.lauf ? `<span class="tag">${a}</span><span class="tag">${b}</span>` : `<button class="btn small" data-act="pts" data-a="${i}" data-k="0">+${a}</button><button class="btn small fill" data-act="pts" data-a="${i}" data-k="1">+${b}</button>`}</div>`).join('')}
+        </div>`;
+    const log = c.pointsLog || [];
+    return `<section class="card" style="margin-top:12px">
+      <h2>Punkte & Level <small>Level ${lv} · ${p} Punkte</small></h2>
+      <div class="bar"><i style="width:${pct}%"></i></div>
+      <p class="hint">${next === undefined ? 'Höchstes Level der Tabelle erreicht.' : `Noch ${next - p} Punkte bis Level ${lv + 1} (ab ${next}).`}${c.lauf ? ' Die Punkte kommen aus dem Laufzettel der DM.' : ''}</p>
+      ${c.lauf ? `<details><summary>Wofür gibt es Punkte?</summary>${actions}</details>` : `${actions}
+        <div class="item-adj" style="justify-content:flex-start">
+          <span class="hint" style="margin:0">Korrektur:</span>
+          <input type="text" inputmode="numeric" class="adj-amt" id="ptsAdj" placeholder="Punkte">
+          <button class="btn small" data-act="ptsAdj" data-d="1">+</button><button class="btn small" data-act="ptsAdj" data-d="-1">−</button>
+        </div>
+        ${log.length ? `<div class="group-h" style="margin-top:10px">Letzte Punkte</div>${log.map((t, i) => `<div class="tx row" style="flex-direction:row">
+          <span class="grow"><span class="${t.p > 0 ? 'plus' : 'minus'}">${t.p > 0 ? '+' : '−'}${Math.abs(t.p)}</span> ${esc(t.what)}<br><small>${esc(t.when)}</small></span>
+          <button class="link danger" data-act="ptsUndo" data-i="${i}">zurücknehmen</button></div>`).join('')}` : ''}`}
+      <div class="row" style="margin-top:12px; border-top:1px solid var(--line); padding-top:10px">
+        <span class="grow"><b>Abenteurergilde</b><br><small class="hint">Stufe ${num(c.guild)} von ${R.guildMax}</small></span>
+        <button class="btn small" data-act="guild" data-d="-1" aria-label="Gildenstufe senken">−</button>
+        <span class="lvl-box">${num(c.guild)}</span>
+        <button class="btn small" data-act="guild" data-d="1" aria-label="Gildenstufe erhöhen">+</button>
+      </div>
+    </section>`;
+  }
+  // Punkte buchen; Level ergibt sich aus den Punkten (mit Nachfrage beim Aufstieg).
+  function addPoints(p, what, undoIndex = -1) {
+    const c = ch(), before = num(c.points), after = Math.max(0, before + p);
+    const lv = levelFromPoints(after);
+    if (lv > c.level) {
+      const bo = bonusAt(c.level);
+      if (!confirm(`${what}: ${p > 0 ? '+' : ''}${p} Punkte.\n\nDamit erreicht ${c.name} Level ${lv}! (+${bo.lp} LP, +${bo.res} ${klassOf(c).resource}, ${bo.attr} Punkt(e) zum Verteilen)\n\nÜbernehmen?`)) return;
+    } else if (lv < c.level && !confirm(`Damit sinkt ${c.name} auf Level ${lv}. Übernehmen?`)) return;
+    change((c) => {
+      c.points = after; c.level = lv;
+      const when = new Date().toLocaleString('de-DE', { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' });
+      if (undoIndex >= 0) { c.pointsLog.splice(undoIndex, 1); return; }
+      c.pointsLog = [{ p: after - before, what, when, ts: Date.now() }, ...(c.pointsLog || [])].slice(0, 10);
+    });
+    if (lv > levelFromPoints(before)) toast(`Levelaufstieg auf Level ${lv}!`);
+  }
+
   function applyLaufzettel(announce) {
     let up = '';
     S.chars.forEach((c) => {
@@ -841,6 +893,21 @@
         }
         return change((c) => { c[list][i].qty = left; });
       }
+      case 'pts': {
+        const [n, a, bb] = R.pointActions[num(b.dataset.a)], k = num(b.dataset.k);
+        return addPoints(k ? bb : a, `${n} (${k ? 'besonders' : 'regulär'})`);
+      }
+      case 'ptsAdj': {
+        const v = num(($('#ptsAdj').value || '').replace(/\D/g, ''));
+        if (!v) return alert('Bitte eine Punktzahl eintragen.');
+        return addPoints(d * v, 'Korrektur');
+      }
+      case 'ptsUndo': {
+        const t = (ch().pointsLog || [])[i];
+        if (!t || !confirm(`„${t.what}“ (${t.p > 0 ? '+' : ''}${t.p}) zurücknehmen?`)) return;
+        return addPoints(-t.p, 'Zurückgenommen: ' + t.what, i);
+      }
+      case 'guild': return change((c) => { c.guild = Math.max(0, Math.min(R.guildMax, num(c.guild) + d)); });
       case 'slotExtra': return change((c) => { c.slotExtra = Math.max(0, num(c.slotExtra) + d); });
       case 'tx': return booking(d, b);
       case 'export': return exportFile();
@@ -897,7 +964,8 @@
       ['g', 's', 'k'].forEach((k) => { const bb = num(b && b[k]); out[k] = bb + (num(l[k]) - bb) + (num(r[k]) - bb); });
       return out;
     }
-    if (last === 'moneyLog' && Array.isArray(l) && Array.isArray(r)) {
+    if (last === 'points' && typeof l === 'number' && typeof r === 'number') return num(b) + (l - num(b)) + (r - num(b));
+    if ((last === 'moneyLog' || last === 'pointsLog') && Array.isArray(l) && Array.isArray(r)) {
       const seen = new Set(), all = [];
       [...l, ...r].forEach((t) => { const k = canon(t); if (!seen.has(k)) { seen.add(k); all.push(t); } });
       return all.sort((x, y) => num(y.ts) - num(x.ts)).slice(0, 10);
@@ -935,7 +1003,7 @@
     resCur: 'Ressource', resBase: 'Ressource Start', resExtra: 'Ressource Zusatz', atk: 'ATK', def: 'DEF', saves: 'Rettungswürfe', vorteil: 'Vorteil', nachteil: 'Nachteil',
     money: 'Geld', moneyLog: 'Buchungen', attrSlots: 'Levelpunkte', classSlots: 'Klassenpunkte', aspects: 'Übungskreise', techniques: 'Techniken', items: 'Inventar',
     freeItems: 'Ohne Inventarslot', equip: 'Ausrüstung', notes: 'Notizen', slotExtra: 'Slot-Ausbau', stufe: 'Stufe', punkte: 'Punkte', skill: 'Fähigkeit', qty: 'Anzahl',
-    note: 'Notiz', label: 'Slot-Name', item: 'Gegenstand', diff: 'Schwierigkeit', klass: 'Klasse', from: 'Ausrichtung' };
+    note: 'Notiz', points: 'Punkte', pointsLog: 'Punkte-Verlauf', guild: 'Abenteurergilde', laufName: 'Name im Laufzettel', label: 'Slot-Name', item: 'Gegenstand', diff: 'Schwierigkeit', klass: 'Klasse', from: 'Ausrichtung' };
   const pathText = (path) => path.filter((p) => p !== 'chars').map((p) => (typeof p === 'object' ? p.name || 'Eintrag' : typeof p === 'number' ? `Nr. ${p + 1}` : FIELD[p] || p)).join(' › ');
   function shown(v) {
     if (v === undefined || v === null) return v === undefined ? '(gelöscht)' : '(voll)';
