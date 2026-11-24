@@ -165,9 +165,9 @@
         if (!s.skill) return `<div class="slot empty"><span class="dot" style="background:var(--line)"></span><button class="name btn small" style="text-align:left" data-act="pickAttr" data-i="${i}">+ Fähigkeit wählen</button></div>`;
         return `<div class="slot"><span class="dot" style="background:${info ? info.color : 'var(--line)'}"></span>
           <div class="name" data-act="pickAttr" data-i="${i}"><b>${esc(s.skill)}</b><small>${esc(info ? info.desc : '')}</small></div>
-          <button class="btn small" data-act="attrStufe" data-i="${i}" data-d="-1">−</button><span class="lvl">${s.stufe}</span>
-          <button class="btn small" data-act="attrStufe" data-i="${i}" data-d="1">+</button>
-          <input type="checkbox" data-check="attr" data-i="${i}"${s.check ? ' checked' : ''} aria-label="Kästchen"></div>`;
+          <button class="btn small" data-act="attrStufe" data-i="${i}" data-d="-1" aria-label="Stufe senken">−</button>
+          <button class="btn small" data-act="attrStufe" data-i="${i}" data-d="1" aria-label="Stufe erhöhen">+</button>
+          <span class="lvl" title="Stufe">${s.stufe}</span></div>`;
       }).join('')}
       <p class="hint">Die unterste Fähigkeit jeder Farbe ist erst skillbar, wenn die anderen fünf derselben Farbe mindestens Stufe 1 haben.</p>
     </section>
@@ -178,9 +178,9 @@
         const known = sub.find(([n]) => n === s.name);
         return `<div class="slot"><span class="dot" style="background:var(--c)"></span>
           <div class="name" data-act="pickClass" data-i="${i}"><b>${esc(s.name)}</b><small>${esc(known ? known[1] : s.text)}</small></div>
-          <button class="btn small" data-act="classStufe" data-i="${i}" data-d="-1">−</button><span class="lvl">${s.stufe}</span>
-          <button class="btn small" data-act="classStufe" data-i="${i}" data-d="1">+</button>
-          <input type="checkbox" data-check="class" data-i="${i}"${s.check ? ' checked' : ''} aria-label="Kästchen"></div>`;
+          <button class="btn small" data-act="classStufe" data-i="${i}" data-d="-1" aria-label="Stufe senken">−</button>
+          <button class="btn small" data-act="classStufe" data-i="${i}" data-d="1" aria-label="Stufe erhöhen">+</button>
+          <span class="lvl" title="Stufe">${s.stufe}</span></div>`;
       }).join('')}
       <p class="hint">Klassenfähigkeiten haben die Stufen 1–6. Die Unterklasse wählst du im Reiter „Bogen“.</p>
     </section>`;
@@ -422,7 +422,6 @@
       if (t.dataset.bind === 'klass') c.sub = '';
     });
     else if (t.dataset.bindn) render();
-    else if (t.dataset.check) change((c) => { (t.dataset.check === 'attr' ? c.attrSlots : c.classSlots)[num(t.dataset.i)].check = t.checked; });
     else if (t.id === 'import' && t.files[0]) importFile(t.files[0]);
   });
   view.addEventListener('click', (e) => {

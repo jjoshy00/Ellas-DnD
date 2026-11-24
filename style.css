@@ -92,8 +92,8 @@ textarea { resize: vertical; min-height: 90px; }
 .slot .name { flex: 1; min-width: 0; }
 .slot .name b { display: block; font-weight: 600; }
 .slot .name small { color: var(--muted); font-size: .78rem; display: block; }
-.slot .lvl { width: 30px; text-align: center; font-weight: 700; color: var(--c); }
-.slot input[type=checkbox] { width: 22px; height: 22px; accent-color: var(--c); }
+.slot .lvl { flex: none; width: 36px; height: 36px; line-height: 32px; text-align: center; font-weight: 700; font-size: 1.1rem;
+  color: var(--c); border: 2px solid var(--ink); border-radius: 4px; }
 .slot.empty .name { color: var(--muted); font-style: italic; }
 
 /* Kreise */
