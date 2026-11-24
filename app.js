@@ -34,7 +34,12 @@
     const c = hicks();
     return { chars: [c], current: c.id, tab: 'bogen', sheet: 'zauber' };
   }
-  let S = load();
+  // Einträge in Listen bekommen eine feste Kennung, damit der Abgleich sie zuordnen kann.
+  function withIds(st) {
+    (st.chars || []).forEach((c) => ['items', 'freeItems'].forEach((l) => (c[l] || []).forEach((it) => { it.id ||= uid(); })));
+    return st;
+  }
+  let S = withIds(load());
   function save() { try { localStorage.setItem(KEY, JSON.stringify(S)); } catch (e) { /* kein Speicher */ } }
   const ch = () => S.chars.find((c) => c.id === S.current) || S.chars[0];
 
@@ -281,7 +286,7 @@
     change((c) => {
       COINS.forEach(([m]) => { c.money[m] = num(c.money[m]) + d * amt[m]; });
       const when = new Date().toLocaleString('de-DE', { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' });
-      c.moneyLog = [{ d, ...amt, note, when }, ...(c.moneyLog || [])].slice(0, 10);
+      c.moneyLog = [{ d, ...amt, note, when, ts: Date.now() }, ...(c.moneyLog || [])].slice(0, 10);
     });
   }
 
@@ -341,7 +346,7 @@
       if (act === 'slot') change((c) => {
         const [item] = c[list].splice(i, 1);
         item.qty = num(item.qty, 1);
-        if (item.qty > 1) { c[list].splice(i, 0, { ...item, qty: item.qty - 1 }); item.qty = 1; }
+        if (item.qty > 1) { c[list].splice(i, 0, { ...item, id: uid(), qty: item.qty - 1 }); item.qty = 1; }
         c.equip[num(b.dataset.j)].item = { atk: 0, def: 0, ...item, from: list };
       });
       dlg.close();
@@ -377,6 +382,7 @@
     return `
     <section class="card"><h2>Notizen</h2>
       <textarea data-bind="notes" rows="14">${esc(c.notes)}</textarea></section>
+    ${syncCard()}
     <section class="card"><h2>Sicherung</h2>
       <p class="hint">Die Daten liegen nur auf diesem Gerät. Ab und zu sichern, z. B. in Google Drive.</p>
       <div class="row">
@@ -626,7 +632,7 @@
       case 'addItem': {
         const list = b.dataset.list || 'items';
         if (list === 'items' && ch().items.length >= slotMax(ch())) return alert('Alle Inventarslots sind belegt. Baue einen Slot aus oder lege den Gegenstand in „Ohne Inventarslot“.');
-        return change((c) => { (c[list] ||= []).push({ name: '', qty: 1, note: '' }); });
+        return change((c) => { (c[list] ||= []).push({ id: uid(), name: '', qty: 1, note: '' }); });
       }
       case 'delItem': {
         const list = b.dataset.list || 'items', it = ch()[list][i];
@@ -676,6 +682,251 @@
       S = d; save(); render();
     }).catch(() => alert('Die Datei ist keine gültige Sicherung.'));
   }
+
+  // ---------- Abgleich zwischen Geräten (geheimes Gist im GitHub-Konto) ----------
+  const SYNC_KEY = 'charakterbogen-sync';
+  const GIST_FILE = 'charakterbogen-daten.json';
+  const loadSync = () => { try { return JSON.parse(localStorage.getItem(SYNC_KEY)) || {}; } catch (e) { return {}; } };
+  let Y = loadSync();
+  const saveSync = () => { try { localStorage.setItem(SYNC_KEY, JSON.stringify(Y)); } catch (e) { /* kein Speicher */ } };
+  const shared = (st) => JSON.parse(JSON.stringify({ chars: st.chars }));
+
+  // JSON mit sortierten Schlüsseln vergleichen
+  const canon = (v) => JSON.stringify(v, (k, x) => (x && typeof x === 'object' && !Array.isArray(x) ? Object.keys(x).sort().reduce((o, key) => { o[key] = x[key]; return o; }, {}) : x));
+  const same = (a, b) => canon(a) === canon(b);
+  const isObj = (v) => v && typeof v === 'object' && !Array.isArray(v);
+  const hasIds = (...lists) => lists.every((l) => !l || (Array.isArray(l) && l.every((x) => isObj(x) && x.id)));
+
+  // Drei-Wege-Abgleich: base = Stand beim letzten Abgleich, l = dieses Gerät, r = anderes Gerät.
+  function merge(b, l, r, path, conflicts) {
+    if (same(l, r)) return l;
+    if (same(l, b)) return r;
+    if (same(r, b)) return l;
+    const last = path[path.length - 1];
+    if (last === 'money' && isObj(l) && isObj(r)) {
+      const out = {};
+      ['g', 's', 'k'].forEach((k) => { const bb = num(b && b[k]); out[k] = bb + (num(l[k]) - bb) + (num(r[k]) - bb); });
+      return out;
+    }
+    if (last === 'moneyLog' && Array.isArray(l) && Array.isArray(r)) {
+      const seen = new Set(), all = [];
+      [...l, ...r].forEach((t) => { const k = canon(t); if (!seen.has(k)) { seen.add(k); all.push(t); } });
+      return all.sort((x, y) => num(y.ts) - num(x.ts)).slice(0, 10);
+    }
+    if (isObj(l) && isObj(r)) {
+      const bo = isObj(b) ? b : {}, out = {};
+      new Set([...Object.keys(l), ...Object.keys(r)]).forEach((k) => {
+        const v = merge(bo[k], l[k], r[k], [...path, k], conflicts);
+        if (v !== undefined) out[k] = v;
+      });
+      return out;
+    }
+    if (Array.isArray(l) && Array.isArray(r)) {
+      if (hasIds(b, l, r)) {
+        const map = (a) => new Map((a || []).map((x) => [x.id, x]));
+        const bm = map(b), lm = map(l), rm = map(r);
+        const ids = [...l.map((x) => x.id), ...r.map((x) => x.id).filter((id) => !lm.has(id))];
+        return ids.map((id) => merge(bm.get(id), lm.get(id), rm.get(id), [...path, { id, name: (lm.get(id) || rm.get(id)).name }], conflicts)).filter((v) => v !== undefined);
+      }
+      if (l.length === r.length && (!Array.isArray(b) || b.length === l.length)) {
+        return l.map((x, i) => merge(Array.isArray(b) ? b[i] : undefined, x, r[i], [...path, i], conflicts));
+      }
+    }
+    conflicts.push({ path, l, r });
+    return { __konflikt: conflicts.length - 1 };
+  }
+  function resolve(v, choice) {
+    if (isObj(v) && v.__konflikt !== undefined) return choice[v.__konflikt];
+    if (Array.isArray(v)) return v.map((x) => resolve(x, choice)).filter((x) => x !== undefined);
+    if (isObj(v)) { const o = {}; Object.keys(v).forEach((k) => { const x = resolve(v[k], choice); if (x !== undefined) o[k] = x; }); return o; }
+    return v;
+  }
+
+  const FIELD = { name: 'Name', sub: 'Unterklasse', alter: 'Alter', rasse: 'Rasse', groesse: 'Größe', level: 'Level', lpCur: 'Lebenspunkte', lpExtra: 'LP Zusatz',
+    resCur: 'Ressource', resBase: 'Ressource Start', resExtra: 'Ressource Zusatz', atk: 'ATK', def: 'DEF', saves: 'Rettungswürfe', vorteil: 'Vorteil', nachteil: 'Nachteil',
+    money: 'Geld', moneyLog: 'Buchungen', attrSlots: 'Levelpunkte', classSlots: 'Klassenpunkte', aspects: 'Übungskreise', techniques: 'Techniken', items: 'Inventar',
+    freeItems: 'Ohne Inventarslot', equip: 'Ausrüstung', notes: 'Notizen', slotExtra: 'Slot-Ausbau', stufe: 'Stufe', punkte: 'Punkte', skill: 'Fähigkeit', qty: 'Anzahl',
+    note: 'Notiz', label: 'Slot-Name', item: 'Gegenstand', diff: 'Schwierigkeit', klass: 'Klasse', from: 'Unterklasse' };
+  const pathText = (path) => path.filter((p) => p !== 'chars').map((p) => (typeof p === 'object' ? p.name || 'Eintrag' : typeof p === 'number' ? `Nr. ${p + 1}` : FIELD[p] || p)).join(' › ');
+  function shown(v) {
+    if (v === undefined || v === null) return v === undefined ? '(gelöscht)' : '(voll)';
+    if (Array.isArray(v)) return `${v.length} Einträge`;
+    if (isObj(v)) return v.name || v.skill || Object.entries(v).filter(([k]) => k !== 'id').map(([k, x]) => `${FIELD[k] || k}: ${typeof x === 'object' ? '…' : x}`).join(', ').slice(0, 80);
+    if (typeof v === 'boolean') return v ? 'ja' : 'nein';
+    return String(v).length > 80 ? String(v).slice(0, 80) + ' …' : String(v) || '(leer)';
+  }
+
+  async function gh(method, url, body) {
+    const res = await fetch('https://api.github.com' + url, {
+      method, headers: { Accept: 'application/vnd.github+json', Authorization: 'Bearer ' + Y.token, ...(body ? { 'Content-Type': 'application/json' } : {}) },
+      body: body ? JSON.stringify(body) : undefined, cache: 'no-store',
+    });
+    if (res.status === 401) throw new Error('Der Zugangsschlüssel ist ungültig oder abgelaufen.');
+    if (res.status === 404 && url.startsWith('/gists/')) { const e = new Error('Ablage nicht gefunden.'); e.notFound = true; throw e; }
+    if (!res.ok) throw new Error(`GitHub antwortet mit Fehler ${res.status}.`);
+    return res.json();
+  }
+  async function readGist(g) {
+    const f = g.files && g.files[GIST_FILE];
+    if (!f) return null;
+    const txt = f.truncated ? await (await fetch(f.raw_url, { cache: 'no-store' })).text() : f.content;
+    return JSON.parse(txt);
+  }
+  async function findGist() {
+    for (let page = 1; page <= 5; page++) {
+      const list = await gh('GET', `/gists?per_page=100&page=${page}`);
+      const hit = list.find((g) => g.files && g.files[GIST_FILE]);
+      if (hit) return hit.id;
+      if (list.length < 100) break;
+    }
+    return null;
+  }
+  const writeGist = (data) => gh('PATCH', '/gists/' + Y.gistId, { files: { [GIST_FILE]: { content: JSON.stringify(data) } } });
+
+  function setButton(state) {
+    const b = $('#btn-sync');
+    b.classList.toggle('spin', state === 'busy');
+    b.disabled = state === 'busy';
+  }
+  function finish(data, msg) {
+    S.chars = withIds(JSON.parse(JSON.stringify(data))).chars;
+    if (!S.chars.some((c) => c.id === S.current)) S.current = S.chars[0].id;
+    Y.base = shared(S); Y.last = new Date().toLocaleString('de-DE', { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' });
+    save(); saveSync(); render(); toast(msg);
+  }
+  function toast(msg) {
+    let t = $('#toast');
+    if (!t) { t = document.createElement('div'); t.id = 'toast'; document.body.appendChild(t); }
+    t.textContent = msg; t.classList.add('on');
+    clearTimeout(t._h); t._h = setTimeout(() => t.classList.remove('on'), 3500);
+  }
+
+  // auto = beim Laden der Seite: kein Einrichtungsdialog, Fehler nur als kurzer Hinweis.
+  async function sync(auto = false) {
+    if (!Y.token) return auto ? undefined : tokenDialog(true);
+    setButton('busy');
+    try {
+      if (!Y.gistId) Y.gistId = await findGist();
+      if (!Y.gistId) {
+        const g = await gh('POST', '/gists', { description: 'Charakterbogen (App-Daten)', public: false, files: { [GIST_FILE]: { content: JSON.stringify(shared(S)) } } });
+        Y.gistId = g.id; saveSync();
+        return finish(shared(S), 'Gespeichert. Auf dem anderen Gerät jetzt „Aktualisieren“ drücken.');
+      }
+      let remote;
+      try { remote = await readGist(await gh('GET', '/gists/' + Y.gistId)); } catch (e) { if (e.notFound) { Y.gistId = ''; saveSync(); setButton(); return sync(auto); } throw e; }
+      const local = shared(S);
+      if (!remote || !Array.isArray(remote.chars) || !remote.chars.length) { await writeGist(local); return finish(local, 'Gespeichert.'); }
+      if (!Y.base) {
+        setButton();
+        return firstTimeDialog(local, remote);
+      }
+      const conflicts = [];
+      const merged = merge(Y.base, local, remote, [], conflicts);
+      if (conflicts.length) { setButton(); return conflictDialog(merged, conflicts, remote); }
+      await complete(merged, remote);
+    } catch (e) {
+      const msg = navigator.onLine ? 'Aktualisieren hat nicht geklappt: ' + (e.message || e) : 'Offline – Abgleich beim nächsten Laden mit Internet.';
+      if (auto) toast(msg); else alert(msg);
+    } finally { setButton(); }
+  }
+  async function complete(merged, remote) {
+    setButton('busy');
+    try {
+      if (!same(merged, remote)) await writeGist(merged);
+      finish(merged, same(merged, shared(S)) ? (same(merged, remote) ? 'Alles aktuell.' : 'Gespeichert.') : 'Aktualisiert.');
+    } catch (e) { alert('Aktualisieren hat nicht geklappt: ' + (e.message || e)); }
+    finally { setButton(); }
+  }
+  function firstTimeDialog(local, remote) {
+    const names = (d) => d.chars.map((c) => c.name).join(', ');
+    openDialog(`<h3>Erster Abgleich auf diesem Gerät</h3>
+      <p>In der Ablage liegen schon Daten: <b>${esc(names(remote))}</b>.<br>Auf diesem Gerät: <b>${esc(names(local))}</b>.</p>
+      <button class="choice" data-d-act="take">Daten aus der Ablage übernehmen<small>Empfohlen. Was auf diesem Gerät steht, wird ersetzt.</small></button>
+      <button class="choice" data-d-act="merge">Zusammenführen<small>Jeder Unterschied wird einzeln abgefragt.</small></button>
+      <div class="row end"><button class="btn" data-d-act="close">Abbrechen</button></div>`,
+    (act) => {
+      dlg.close();
+      if (act === 'take') finish(remote, 'Daten übernommen.');
+      if (act === 'merge') {
+        const conflicts = [];
+        const merged = merge({}, local, remote, [], conflicts);
+        if (conflicts.length) conflictDialog(merged, conflicts, remote); else complete(merged, remote);
+      }
+    });
+  }
+  function conflictDialog(merged, conflicts, remote) {
+    const choice = conflicts.map((x) => x.l);
+    const draw = () => `<h3>Unterschiede klären</h3>
+      <p class="hint">Diese Angaben wurden auf beiden Geräten unterschiedlich geändert. Welche gilt?</p>
+      ${conflicts.map((x, i) => `<div class="conflict"><b>${esc(pathText(x.path))}</b>
+        <button class="choice${choice[i] === x.l ? ' on' : ''}" data-d-act="pick" data-i="${i}" data-s="l">Dieses Gerät<small>${esc(shown(x.l))}</small></button>
+        <button class="choice${choice[i] === x.r ? ' on' : ''}" data-d-act="pick" data-i="${i}" data-s="r">Anderes Gerät<small>${esc(shown(x.r))}</small></button></div>`).join('')}
+      <div class="row end"><button class="btn" data-d-act="close">Abbrechen</button><button class="btn fill" data-d-act="ok">Übernehmen</button></div>`;
+    openDialog(draw(), (act, b) => {
+      if (act === 'pick') { const i = num(b.dataset.i); choice[i] = b.dataset.s === 'l' ? conflicts[i].l : conflicts[i].r; const top = dlg.scrollTop; dlg.innerHTML = draw(); dlg.scrollTop = top; return; }
+      dlg.close();
+      if (act === 'ok') complete(resolve(merged, choice), remote);
+    });
+  }
+  function tokenDialog(thenSync) {
+    openDialog(`<h3>Abgleich einrichten</h3>
+      <p class="hint">Einmal pro Gerät nötig. Die Daten werden als geheime Datei („Gist“) in deinem GitHub-Konto abgelegt.</p>
+      <ol class="steps">
+        <li>Öffne <a href="https://github.com/settings/tokens/new?scopes=gist&description=Charakterbogen" target="_blank" rel="noopener">diesen Link</a> (bei GitHub angemeldet).</li>
+        <li>Bei „Expiration“ <b>No expiration</b> wählen. Das Häkchen bei <b>gist</b> ist schon gesetzt.</li>
+        <li>Ganz unten <b>Generate token</b> drücken und den Schlüssel (beginnt mit <code>ghp_</code>) kopieren.</li>
+        <li>Hier einfügen. Auf dem zweiten Gerät kannst du denselben Schlüssel verwenden.</li>
+      </ol>
+      <label class="f">Zugangsschlüssel<input id="tok" autocomplete="off" spellcheck="false" placeholder="ghp_…" value="${esc(Y.token || '')}"></label>
+      <div class="row end"><button class="btn" data-d-act="close">Abbrechen</button><button class="btn fill" data-d-act="ok">Speichern</button></div>`,
+    (act) => {
+      if (act === 'ok') {
+        const t = $('#tok', dlg).value.trim();
+        if (!t) return $('#tok', dlg).focus();
+        if (t !== Y.token) { Y = { token: t }; saveSync(); }
+        dlg.close(); render();
+        if (thenSync) sync();
+        return;
+      }
+      dlg.close();
+    });
+  }
+  function syncCard() {
+    return `<section class="card"><h2>Abgleich PC ↔ Handy</h2>
+      ${Y.token ? `<p class="hint" style="margin-top:0">Eingerichtet.${Y.last ? ` Zuletzt aktualisiert: ${esc(Y.last)}.` : ''}</p>` : '<p class="hint" style="margin-top:0">Noch nicht eingerichtet.</p>'}
+      <p class="hint">Abgeglichen wird automatisch beim Laden der Seite (z. B. Neu-Laden im Browser / F5) und mit ⟳ oben rechts. Dabei werden deine Änderungen gespeichert, die des anderen Geräts geholt und neue App-Fassungen geladen. Änderungen auf beiden Seiten werden zusammengeführt, bei Widersprüchen fragt die App.</p>
+      <div class="row">
+        <button class="btn fill" data-act="sync">⟳ Aktualisieren</button>
+        <button class="btn" data-act="token">${Y.token ? 'Schlüssel ändern' : 'Einrichten'}</button>
+        ${Y.token ? '<button class="btn danger" data-act="unsync">Abgleich trennen</button>' : ''}
+      </div></section>`;
+  }
+  // ⟳: abgleichen und danach die Seite neu laden (holt auch eine neue Fassung der App).
+  async function syncAndReload() {
+    if (!Y.token) return tokenDialog(true);
+    await sync();
+    if (dlg.open) return; // Rückfrage offen – erst nach der Antwort neu laden
+    try { sessionStorage.setItem('cb-synced', '1'); } catch (e) { /* egal */ }
+    location.reload();
+  }
+  $('#btn-sync').onclick = syncAndReload;
+  // Beim Laden (auch Neu-Laden im Browser) automatisch abgleichen.
+  let skip = false;
+  try { skip = sessionStorage.getItem('cb-synced') === '1'; sessionStorage.removeItem('cb-synced'); } catch (e) { /* egal */ }
+  if (!skip) setTimeout(() => sync(true), 300);
+  // Kommt die installierte App aus dem Hintergrund zurück, ebenfalls abgleichen.
+  let hiddenAt = 0;
+  document.addEventListener('visibilitychange', () => {
+    if (document.hidden) hiddenAt = Date.now();
+    else if (hiddenAt && Date.now() - hiddenAt > 60000 && !dlg.open) sync(true);
+  });
+  view.addEventListener('click', (e) => {
+    const b = e.target.closest('[data-act]');
+    if (!b) return;
+    if (b.dataset.act === 'sync') syncAndReload();
+    if (b.dataset.act === 'token') tokenDialog(false);
+    if (b.dataset.act === 'unsync' && confirm('Abgleich auf diesem Gerät trennen? Die Daten hier bleiben erhalten.')) { Y = {}; saveSync(); render(); }
+  });
 
   render();
 })();

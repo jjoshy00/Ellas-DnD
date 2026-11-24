@@ -184,3 +184,15 @@ dialog h3 { margin: 0 0 10px; color: var(--c); }
 .equip-vals input { width: 64px; text-align: center; background: var(--paper); }
 
 .fixed { margin-top: 2px; padding: 8px; border-radius: 8px; background: var(--cl); color: var(--ink); font-size: 1rem; font-weight: 600; }
+
+#btn-sync.spin { animation: spin 1s linear infinite; }
+@keyframes spin { to { transform: rotate(360deg); } }
+#toast { position: fixed; left: 50%; bottom: calc(76px + env(safe-area-inset-bottom)); transform: translateX(-50%) translateY(20px);
+  background: var(--ink); color: var(--paper); padding: 10px 16px; border-radius: 12px; font-size: .9rem; opacity: 0;
+  transition: .25s; pointer-events: none; z-index: 20; max-width: 90vw; text-align: center; }
+#toast.on { opacity: 1; transform: translateX(-50%) translateY(0); }
+.conflict { border-top: 1px solid var(--line); padding-top: 8px; margin-top: 8px; }
+.conflict > b { display: block; margin-bottom: 6px; font-size: .9rem; }
+.choice.on { border: 2px solid var(--c); background: var(--cl); }
+.steps { padding-left: 20px; font-size: .9rem; }
+.steps li { margin-bottom: 6px; }

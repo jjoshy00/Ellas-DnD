@@ -1,6 +1,6 @@
 // Offline-Speicher: alle Dateien werden beim ersten Öffnen abgelegt.
 // Bei jeder neuen Fassung VERSION erhöhen, damit Handys die neuen Dateien holen.
-const VERSION = 'v10';
+const VERSION = 'v11';
 const FILES = ['./', 'index.html', 'style.css', 'data.js', 'app.js', 'manifest.webmanifest', 'icons/icon-192.png', 'icons/icon-512.png'];
 
 self.addEventListener('install', (e) => {
@@ -11,7 +11,7 @@ self.addEventListener('activate', (e) => {
 });
 // Erst das Netz versuchen (neue Fassung), sonst den Offline-Speicher.
 self.addEventListener('fetch', (e) => {
-  if (e.request.method !== 'GET') return;
+  if (e.request.method !== 'GET' || !e.request.url.startsWith(self.location.origin)) return;
   e.respondWith(
     fetch(e.request).then((res) => {
       const copy = res.clone();
