@@ -85,9 +85,9 @@
   }
   const change = (fn) => { fn(ch()); save(); render(); };
 
-  function stat(label, value, max, act) {
+  function stat(label, value, max, act, note = '') {
     return `<div class="stat"><div class="lbl">${label}</div>
-      <div class="val">${value}${max !== undefined ? `<small> / ${max}</small>` : ''}</div>
+      <div class="val">${value}${max !== undefined ? `<small> / ${max}</small>` : ''}</div>${note ? `<div class="hint" style="margin:0">${note}</div>` : ''}
       <div class="stepper"><button class="btn" data-act="${act}" data-d="-1">−</button><button class="btn" data-act="${act}" data-d="1">+</button></div></div>`;
   }
 
@@ -118,8 +118,8 @@
       ${stat('Level', c.level, undefined, 'level')}
       <div class="stat"><div class="lbl">Punkte zu verteilen</div><div class="val">${free}</div>
         <div class="hint" style="margin:4px 0 0">1 pro Level: ATK, DEF oder Attributfähigkeit</div></div>
-      ${stat('ATK', c.atk, undefined, 'atk')}
-      ${stat('DEF', c.def, undefined, 'def')}
+      ${stat('ATK', c.atk + gearBonus(c, 'atk'), undefined, 'atk', gearBonus(c, 'atk') ? `${c.atk} geskillt ${gearBonus(c, 'atk') > 0 ? '+' : '−'} ${Math.abs(gearBonus(c, 'atk'))} Ausrüstung` : '')}
+      ${stat('DEF', c.def + gearBonus(c, 'def'), undefined, 'def', gearBonus(c, 'def') ? `${c.def} geskillt ${gearBonus(c, 'def') > 0 ? '+' : '−'} ${Math.abs(gearBonus(c, 'def'))} Ausrüstung` : '')}
     </section>
     ${free < 0 ? '<p class="warn">Es sind mehr Punkte verteilt, als das Level hergibt.</p>' : ''}
 
@@ -296,14 +296,63 @@
         </div>
         <input class="item-note" data-item="note" data-list="${list}" data-i="${i}" value="${esc(it.note)}" placeholder="Notiz">
         <div class="item-actions">
+          <button class="link" data-act="equip" data-list="${list}" data-i="${i}">anlegen</button>
           <button class="link" data-act="moveItem" data-list="${list}" data-i="${i}">${list === 'items' ? '→ ohne Slot' : '→ in einen Slot'}</button>
           <button class="link danger" data-act="delItem" data-list="${list}" data-i="${i}">Entfernen</button>
         </div></div>`).join('');
   }
+  // Ausrüstung: 9 Slots mit ATK/DEF, die zu den Werten im Bogen zählen.
+  const equipOf = (c) => {
+    if (!Array.isArray(c.equip)) c.equip = [];
+    while (c.equip.length < R.equipmentSlots) c.equip.push({ label: '', item: null });
+    return c.equip;
+  };
+  const gearBonus = (c, k) => equipOf(c).reduce((a, e) => a + (e.item ? num(e.item[k]) : 0), 0);
+  const signed = (v) => (v > 0 ? '+' + v : String(v));
+  function equipCard(c) {
+    return `<section class="card">
+      <h2>Ausrüstung <small>${equipOf(c).filter((e) => e.item).length} / ${R.equipmentSlots} angelegt</small></h2>
+      ${equipOf(c).map((e, i) => {
+        const label = `<input class="equip-label" data-equip="label" data-i="${i}" value="${esc(e.label)}" placeholder="Ausrüstung ${i + 1}" aria-label="Name des Slots">`;
+        if (!e.item) return `<div class="item empty-slot equip">${label}<span class="grow">leer</span></div>`;
+        const it = e.item;
+        return `<div class="item equip">
+          ${label}
+          <div class="item-top"><input class="item-name" data-equip="name" data-i="${i}" value="${esc(it.name)}" placeholder="Gegenstand"></div>
+          <div class="equip-vals">
+            <label>ATK<input type="number" inputmode="numeric" data-equip="atk" data-i="${i}" value="${num(it.atk)}"></label>
+            <label>DEF<input type="number" inputmode="numeric" data-equip="def" data-i="${i}" value="${num(it.def)}"></label>
+          </div>
+          <input class="item-note" data-equip="note" data-i="${i}" value="${esc(it.note)}" placeholder="Notiz">
+          <div class="item-actions"><button class="link" data-act="unequip" data-i="${i}">← ablegen ins Inventar</button></div>
+        </div>`;
+      }).join('')}
+      <p class="hint">ATK und DEF der angelegten Ausrüstung werden im Bogen dazugezählt. Anlegen über „anlegen“ im Inventar.</p>
+    </section>`;
+  }
+  function equipItem(list, i) {
+    const c = ch(), free = equipOf(c).map((e, j) => (e.item ? -1 : j)).filter((j) => j >= 0);
+    if (!free.length) return alert('Alle Ausrüstungsslots sind belegt. Lege zuerst etwas ab.');
+    const it = c[list][i];
+    openDialog(`<h3>„${esc(it.name || 'Gegenstand')}“ anlegen</h3><p class="hint">In welchen Ausrüstungsslot?</p>
+      ${free.map((j) => `<button class="choice" data-d-act="slot" data-j="${j}">${esc(c.equip[j].label || `Ausrüstung ${j + 1}`)}</button>`).join('')}
+      <div class="row end"><button class="btn" data-d-act="close">Abbrechen</button></div>`,
+    (act, b) => {
+      if (act === 'slot') change((c) => {
+        const [item] = c[list].splice(i, 1);
+        item.qty = num(item.qty, 1);
+        if (item.qty > 1) { c[list].splice(i, 0, { ...item, qty: item.qty - 1 }); item.qty = 1; }
+        c.equip[num(b.dataset.j)].item = { atk: 0, def: 0, ...item, from: list };
+      });
+      dlg.close();
+    });
+  }
+
   function inventar(c) {
     const max = slotMax(c), used = c.items.length, tl = attrStufe(c, 'Traglast');
     return `
     ${moneyCard(c)}
+    ${equipCard(c)}
     <section class="card">
       <h2>Inventar <small>${used} / ${max} Slots</small></h2>
       ${itemRows(c, 'items')}
@@ -497,6 +546,12 @@
     const t = e.target, c = ch();
     if (t.dataset.bind && t.tagName !== 'SELECT') { c[t.dataset.bind] = t.value; save(); if (t.dataset.bind === 'name') applyTheme(); }
     else if (t.dataset.bindn) { c[t.dataset.bindn] = num(t.value); save(); }
+    else if (t.dataset.equip) {
+      const e = equipOf(c)[num(t.dataset.i)], f = t.dataset.equip;
+      if (f === 'label') e.label = t.value;
+      else if (e.item) e.item[f] = f === 'atk' || f === 'def' ? num(t.value) : t.value;
+      save();
+    }
     else if (t.dataset.item) { const it = (c[t.dataset.list] || c.items)[num(t.dataset.i)]; it[t.dataset.item] = t.dataset.item === 'qty' ? num(t.value, 1) : t.value; save(); }
   });
   view.addEventListener('change', (e) => {
@@ -506,6 +561,7 @@
       if (t.dataset.bind === 'klass') c.sub = '';
     });
     else if (t.dataset.bindn) render();
+    else if (t.dataset.equip === 'atk' || t.dataset.equip === 'def') render();
     else if (t.id === 'import' && t.files[0]) importFile(t.files[0]);
   });
   view.addEventListener('click', (e) => {
@@ -565,6 +621,14 @@
         const from = b.dataset.list, to = from === 'items' ? 'freeItems' : 'items';
         if (to === 'items' && ch().items.length >= slotMax(ch())) return alert('Kein freier Inventarslot.');
         return change((c) => { (c[to] ||= []).push(...c[from].splice(i, 1)); });
+      }
+      case 'equip': return equipItem(b.dataset.list || 'items', i);
+      case 'unequip': {
+        if (ch().items.length >= slotMax(ch())) {
+          if (!confirm('Kein Inventarslot frei. In „Ohne Inventarslot“ ablegen?')) return;
+          return change((c) => { const it = c.equip[i].item; c.equip[i].item = null; delete it.from; (c.freeItems ||= []).push(it); });
+        }
+        return change((c) => { const it = c.equip[i].item; c.equip[i].item = null; delete it.from; c.items.push(it); });
       }
       case 'slotExtra': return change((c) => { c.slotExtra = Math.max(0, num(c.slotExtra) + d); });
       case 'tx': return booking(d, b);

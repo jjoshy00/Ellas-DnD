@@ -5,6 +5,7 @@ window.RULES = {
   startLP: 50,
   lpPerLevel: 1,
   resourcePerLevel: 1,
+  equipmentSlots: 9,  // Ausrüstungsslots (Namen sind in der App frei wählbar)
   inventorySlots: 3,   // Grund-Inventarslots, + 1 je Stufe Traglast, + Ausbau
 
   classes: {

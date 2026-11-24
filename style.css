@@ -174,3 +174,11 @@ dialog h3 { margin: 0 0 10px; color: var(--c); }
   background: none; color: var(--muted); font-style: italic; font-size: .85rem;
 }
 .item.empty-slot .item-no { background: var(--line); color: var(--muted); font-style: normal; }
+
+.equip-label { border: 0; background: none; padding: 0 0 4px; font-size: .75rem; font-weight: 700; color: var(--c); text-transform: uppercase; letter-spacing: .03em; width: 100%; }
+.item.empty-slot.equip { flex-wrap: wrap; }
+.item.empty-slot.equip .equip-label { width: auto; flex: 1; padding: 0; color: var(--muted); }
+.item.empty-slot.equip .grow { flex: none; }
+.equip-vals { display: flex; gap: 10px; margin-top: 6px; }
+.equip-vals label { display: flex; align-items: center; gap: 4px; font-size: .8rem; font-weight: 700; color: var(--muted); }
+.equip-vals input { width: 64px; text-align: center; background: var(--paper); }
