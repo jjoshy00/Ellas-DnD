@@ -142,3 +142,12 @@ dialog h3 { margin: 0 0 10px; color: var(--c); }
 .tx .plus { color: #1b7f3b; font-weight: 600; }
 .tx .minus { color: #b3261e; font-weight: 600; }
 .tx small { color: var(--muted); font-size: .78rem; }
+
+.cat { border: 1px solid var(--line); border-radius: 12px; padding: 8px 10px; margin-bottom: 8px; }
+.cat.mine { border: 2px solid var(--c); background: var(--cl); }
+.cat-h { display: flex; justify-content: space-between; gap: 8px; align-items: baseline; margin-bottom: 4px; }
+.cat-h small { color: var(--muted); font-size: .78rem; text-align: right; }
+.cat-s { padding: 4px 0; }
+.cat-s b { display: block; font-size: .9rem; }
+.cat-s small { color: var(--muted); font-size: .8rem; display: block; }
+.card h2 .row { gap: 6px; flex-wrap: nowrap; }

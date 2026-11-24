@@ -167,17 +167,18 @@
       <p class="hint">Die unterste Fähigkeit jeder Farbe ist erst skillbar, wenn die anderen fünf derselben Farbe mindestens Stufe 1 haben.</p>
     </section>
     <section class="card">
-      <h2>Klassenpunkte <small>${esc(c.sub ? c.sub.split(' (')[0] : 'keine Unterklasse gewählt')}</small></h2>
+      <h2>Klassenpunkte <span class="row"><small>${esc(c.sub ? c.sub.split(' (')[0] : 'keine Unterklasse')}</small><button class="btn small" data-act="catalog">Katalog</button></span></h2>
       ${c.classSlots.map((s, i) => {
         if (!s.name) return `<div class="slot empty"><span class="dot" style="background:var(--line)"></span><button class="name btn small" style="text-align:left" data-act="pickClass" data-i="${i}">+ Klassenfähigkeit wählen</button></div>`;
-        const known = sub.find(([n]) => n === s.name);
-        return `<div class="slot"><span class="dot" style="background:var(--c)"></span>
-          <div class="name" data-act="pickClass" data-i="${i}"><b>${esc(s.name)}</b><small>${esc(known ? known[1] : s.text)}</small></div>
+        const a = findAbility(c, s);
+        const other = a && a.sub !== c.sub;
+        return `<div class="slot"><span class="dot" style="background:${other ? 'var(--line)' : 'var(--c)'}"></span>
+          <div class="name" data-act="pickClass" data-i="${i}"><b>${esc(s.name)}</b><small>${other ? `<i>aus ${esc(a.sub.split(' (')[0])} · </i>` : ''}${esc(a ? a.desc : s.text)}</small></div>
           <button class="btn small" data-act="classStufe" data-i="${i}" data-d="-1" aria-label="Stufe senken">−</button>
           <button class="btn small" data-act="classStufe" data-i="${i}" data-d="1" aria-label="Stufe erhöhen">+</button>
           <span class="lvl" title="Stufe">${s.stufe}</span></div>`;
       }).join('')}
-      <p class="hint">Klassenfähigkeiten haben die Stufen 1–6. Die Unterklasse wählst du im Reiter „Bogen“.</p>
+      <p class="hint">Klassenfähigkeiten haben die Stufen 1–6. Wählbar sind nur die Fähigkeiten der aktuellen Unterklasse (Reiter „Bogen“). Fähigkeiten aus einer früheren Unterklasse bleiben stehen und sind grau markiert.</p>
     </section>`;
   }
 
@@ -344,16 +345,46 @@
     const c = ch();
     const sub = (R.subclasses[c.klass] || {})[c.sub] || [];
     const slot = c.classSlots[i];
+    const taken = (n) => c.classSlots.some((x, j) => j !== i && x.name === n && x.klass === c.klass && x.from === c.sub);
     openDialog(`<h3>Klassenfähigkeit</h3>
-      ${sub.length ? sub.map(([n, d]) => `<button class="choice" data-d-act="pick" data-n="${esc(n)}">${esc(n)}<small>${esc(d)}</small></button>`).join('') : '<p class="hint">Wähle zuerst im Reiter „Bogen“ eine Unterklasse, dann erscheinen hier ihre Fähigkeiten.</p>'}
-      <div class="group-h">Eigene Fähigkeit</div>
-      <label class="f">Name<input id="cn" value="${esc(sub.find(([n]) => n === slot.name) ? '' : slot.name)}"></label>
-      <label class="f">Beschreibung<input id="ct" value="${esc(slot.text)}"></label>
-      <div class="row end">${slot.name ? '<button class="btn danger" data-d-act="clear">Platz leeren</button>' : ''}<button class="btn" data-d-act="close">Abbrechen</button><button class="btn fill" data-d-act="own">Übernehmen</button></div>`,
+      ${c.sub ? `<p class="hint">${esc(klassOf(c).name)} · ${esc(c.sub)}</p>` : ''}
+      ${sub.length ? sub.map(([n, d]) => `<button class="choice" data-d-act="pick" data-n="${esc(n)}"${taken(n) ? ' disabled' : ''}>${esc(n)}<small>${esc(taken(n) ? 'schon eingetragen' : d)}</small></button>`).join('') : '<p class="hint">Wähle zuerst im Reiter „Bogen“ die aktuelle Unterklasse, dann erscheinen hier ihre Fähigkeiten.</p>'}
+      <div class="row end">${slot.name ? '<button class="btn danger" data-d-act="clear">Platz leeren</button>' : ''}<button class="btn" data-d-act="close">Abbrechen</button></div>`,
     (act, b) => {
-      if (act === 'pick') change((c) => { c.classSlots[i] = { name: b.dataset.n, text: '', stufe: c.classSlots[i].name === b.dataset.n ? c.classSlots[i].stufe : 1, check: c.classSlots[i].check }; });
-      if (act === 'own') { const n = $('#cn', dlg).value.trim(); if (n) change((c) => { c.classSlots[i] = { ...c.classSlots[i], name: n, text: $('#ct', dlg).value.trim(), stufe: c.classSlots[i].stufe || 1 }; }); }
+      if (act === 'pick') change((c) => {
+        const same = c.classSlots[i].name === b.dataset.n && c.classSlots[i].from === c.sub;
+        c.classSlots[i] = { name: b.dataset.n, klass: c.klass, from: c.sub, text: '', stufe: same ? c.classSlots[i].stufe : 1 };
+      });
       if (act === 'clear') change((c) => { c.classSlots[i] = { name: '', text: '', stufe: 0, check: false }; });
+      dlg.close();
+    });
+  }
+
+  // Beschreibung einer eingetragenen Klassenfähigkeit (auch aus früherer Unterklasse).
+  function findAbility(c, slot) {
+    const look = (k, sub) => { const hit = ((R.subclasses[k] || {})[sub] || []).find(([n]) => n === slot.name); return hit && { klass: k, sub, desc: hit[1] }; };
+    if (slot.from) { const a = look(slot.klass || c.klass, slot.from); if (a) return a; }
+    const a = look(c.klass, c.sub);
+    if (a) return a;
+    for (const [k, subs] of Object.entries(R.subclasses)) for (const sub of Object.keys(subs)) { const x = look(k, sub); if (x) return x; }
+    return null;
+  }
+
+  // Katalog aller Klassen, Unterklassen und Fähigkeiten.
+  function catalog(klass) {
+    const c = ch();
+    klass = klass || c.klass;
+    const draw = () => `<h3>Katalog der Klassenfähigkeiten</h3>
+      <div class="sheet-tabs">${Object.entries(R.classes).map(([k, v]) => `<button data-d-act="klass" data-k="${k}"${k === klass ? ' class="on"' : ''}>${esc(v.name)}</button>`).join('')}</div>
+      ${Object.entries(R.subclasses[klass] || {}).map(([sub, skills]) => {
+        const mine = klass === c.klass && sub === c.sub;
+        const [name, align] = sub.split(' (');
+        return `<div class="cat${mine ? ' mine' : ''}"><div class="cat-h"><b>${esc(name)}</b><small>${esc((align || '').replace(')', ''))}${mine ? ' · aktuell' : ''}</small></div>
+          ${skills.map(([n, d]) => `<div class="cat-s"><b>${esc(n)}</b><small>${esc(d)}</small></div>`).join('')}</div>`;
+      }).join('')}
+      <div class="row end"><button class="btn" data-d-act="close">Schließen</button></div>`;
+    openDialog(draw(), (act, b) => {
+      if (act === 'klass') { klass = b.dataset.k; dlg.innerHTML = draw(); dlg.scrollTop = 0; return; }
       dlg.close();
     });
   }
@@ -465,6 +496,7 @@
       case 'save': return change((c) => { c.saves[i] = !c.saves[i]; });
       case 'pickAttr': return pickAttr(i);
       case 'pickClass': return pickClass(i);
+      case 'catalog': return catalog();
       case 'attrStufe': {
         const s = ch().attrSlots[i];
         if (d > 0 && lockedReason(ch(), s.skill)) return alert(lockedReason(ch(), s.skill));
