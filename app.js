@@ -93,7 +93,7 @@
     document.documentElement.style.setProperty('--cl', darkMode.matches ? mixHex(k.color, '#221e26', 0.3) : k.light);
     $('meta[name=theme-color]').setAttribute('content', k.color);
     $('#title').textContent = ch().name || 'Charakterbogen';
-    $('#subtitle').textContent = [k.name, ch().sub.split(' (')[0]].filter(Boolean).join(' · ');
+    $('#subtitle').textContent = [k.name, ch().sub ? ch().sub.split(' (')[0] : 'Neutral'].join(' · ');
     document.title = (ch().name || 'Charakterbogen') + ' – Charakterbogen';
   }
   function render() {
@@ -124,7 +124,7 @@
       <label class="f">Name<input data-bind="name" value="${esc(c.name)}"></label>
       <div class="grid2">
         <label class="f">Klasse<div class="fixed">${esc(k.name)}</div></label>
-        <label class="f">Aktuelle Ausrichtung${lz ? `<div class="fixed">${esc(c.sub ? c.sub.split(' (')[0] : 'keine (Mitte)')}</div>` : `<select data-bind="sub"><option value="">–</option>${subs.map((s) => `<option${s === c.sub ? ' selected' : ''}>${esc(s)}</option>`).join('')}</select>`}</label>
+        <label class="f">Aktuelle Ausrichtung${lz ? `<div class="fixed">${esc(c.sub ? c.sub.split(' (')[0] : 'Neutral')}</div>` : `<select data-bind="sub"><option value="">Neutral</option>${subs.map((s) => `<option${s === c.sub ? ' selected' : ''}>${esc(s)}</option>`).join('')}</select>`}</label>
       </div>
       <div class="grid3">
         <label class="f">Alter<input data-bind="alter" value="${esc(c.alter)}"></label>
@@ -191,7 +191,7 @@
       <p class="hint">Die unterste Fähigkeit jeder Farbe ist erst skillbar, wenn die anderen fünf derselben Farbe mindestens Stufe 1 haben.</p>
     </section>
     <section class="card">
-      <h2>Klassenpunkte <span class="row"><small>${esc(c.sub ? c.sub.split(' (')[0] : 'keine Ausrichtung gewählt')}</small><button class="btn small" data-act="catalog">Katalog</button></span></h2>
+      <h2>Klassenpunkte <span class="row"><small>${esc(c.sub ? c.sub.split(' (')[0] : 'Neutral')}</small><button class="btn small" data-act="catalog">Katalog</button></span></h2>
       ${c.classSlots.map((s, i) => {
         if (!s.name) return `<div class="slot empty"><span class="dot" style="background:var(--line)"></span><button class="name btn small" style="text-align:left" data-act="pickClass" data-i="${i}">+ Klassenfähigkeit wählen</button></div>`;
         const a = findAbility(c, s);
@@ -395,7 +395,7 @@
       const sub = regionSub(c.klass, rx * rg, ry * rg);
       const mine = lz && Math.floor(lz.col / rg) === rx && Math.floor(lz.row / rg) === ry;
       svg += `<rect x="${rx * rg * cs}" y="${ry * rg * cs}" width="${rg * cs}" height="${rg * cs}" fill="${mine ? 'var(--cl)' : 'transparent'}" stroke="var(--ink)" stroke-width="1.5"/>`;
-      svg += `<text x="${(rx + 0.5) * rg * cs}" y="${(ry + 0.5) * rg * cs}" text-anchor="middle" dominant-baseline="middle" class="al-sub">${esc(sub ? sub.split(' (')[0] : '')}</text>`;
+      svg += `<text x="${(rx + 0.5) * rg * cs}" y="${(ry + 0.5) * rg * cs}" text-anchor="middle" dominant-baseline="middle" class="al-sub">${esc(sub ? sub.split(' (')[0] : 'Neutral')}</text>`;
     }
     for (let i = 1; i < g; i++) if (i % rg) {
       svg += `<line x1="${i * cs}" y1="0" x2="${i * cs}" y2="${g * cs}" stroke="var(--line)" stroke-width=".5"/><line x1="0" y1="${i * cs}" x2="${g * cs}" y2="${i * cs}" stroke="var(--line)" stroke-width=".5"/>`;
