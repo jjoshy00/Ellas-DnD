@@ -611,15 +611,29 @@
     const taken = new Set(c.attrSlots.map((s) => s.skill).filter(Boolean));
     const curSkill = c.attrSlots[i].skill;
     openDialog(`<h3>Attributfähigkeit wählen</h3>
+      ${curSkill ? `<div class="row" style="margin-bottom:8px"><span class="grow hint" style="margin:0">Aktuell: <b>${esc(curSkill)}</b></span><button class="btn small danger" data-d-act="clear">Entfernen</button></div>` : ''}
       ${R.attributeGroups.map((g) => `<div class="group-h" style="color:${g.color}">●</div>${g.skills.map(([n, d]) => {
         const lock = lockedReason(c, n);
         const dis = (taken.has(n) && n !== curSkill) || lock;
         return `<button class="choice" data-d-act="pick" data-n="${esc(n)}" style="border-left:5px solid ${g.color}"${dis ? ' disabled' : ''}>${esc(n)}<small>${esc(lock || (taken.has(n) && n !== curSkill ? 'schon gewählt' : d))}</small></button>`;
       }).join('')}`).join('')}
-      <div class="row end">${curSkill ? '<button class="btn danger" data-d-act="clear">Platz leeren</button>' : ''}<button class="btn" data-d-act="close">Abbrechen</button></div>`,
+      <div class="row end"><button class="btn" data-d-act="close">Abbrechen</button></div>`,
     (act, b) => {
-      if (act === 'pick') change((c) => { if (c.attrSlots[i].skill !== b.dataset.n) c.attrSlots[i] = { skill: b.dataset.n, stufe: 0, check: false }; });
-      if (act === 'clear') change((c) => { c.attrSlots[i] = { skill: '', stufe: 0, check: false }; });
+      if (act === 'pick') {
+        const slot = ch().attrSlots[i];
+        if (slot.skill === b.dataset.n) return dlg.close();
+        // Neue Fähigkeit startet auf Stufe 1 und kostet einen Punkt (beim Tausch wird der alte Platz frei).
+        const refund = slot.skill ? num(slot.stufe) : 0;
+        const free = levelPointsTotal(ch()) - spentPoints(ch()) + refund;
+        if (free < 1 && !confirm(`Keine Punkte mehr zu verteilen (Level ${ch().level} gibt ${levelPointsTotal(ch())}, verteilt sind ${spentPoints(ch()) - refund}).\n\nTrotzdem hinzufügen (z. B. weil der DM es erlaubt)?`)) return;
+        if (slot.skill && !confirm(`„${slot.skill}“ (Stufe ${slot.stufe}) durch „${b.dataset.n}“ ersetzen? Die Punkte von „${slot.skill}“ werden wieder frei.`)) return;
+        change((c) => { c.attrSlots[i] = { skill: b.dataset.n, stufe: 1, check: false }; });
+      }
+      if (act === 'clear') {
+        const sl = ch().attrSlots[i];
+        if (!confirm(`„${sl.skill}“ entfernen?${sl.stufe ? ` Die ${sl.stufe} Punkt(e) werden wieder frei.` : ''}`)) return;
+        change((c) => { c.attrSlots[i] = { skill: '', stufe: 0, check: false }; });
+      }
       dlg.close();
     });
   }
@@ -918,8 +932,12 @@
       case 'attrStufe': {
         const s = ch().attrSlots[i];
         if (d > 0 && lockedReason(ch(), s.skill)) return alert(lockedReason(ch(), s.skill));
+        if (d < 0 && s.stufe <= 1) {
+          if (!confirm(`„${s.skill}“ entfernen? ${s.stufe ? 'Der Punkt wird wieder frei.' : ''}`)) return;
+          return change((c) => { c.attrSlots[i] = { skill: '', stufe: 0, check: false }; });
+        }
         if (!pointOk(d)) return;
-        return change((c) => { c.attrSlots[i].stufe = Math.max(0, c.attrSlots[i].stufe + d); });
+        return change((c) => { c.attrSlots[i].stufe = Math.max(1, c.attrSlots[i].stufe + d); });
       }
       case 'classStufe': return change((c) => { c.classSlots[i].stufe = Math.max(0, Math.min(6, c.classSlots[i].stufe + d)); });
       case 'sheet': S.tab = 'techniken'; S.sheet = b.dataset.k; save(); return render();
