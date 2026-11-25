@@ -563,8 +563,8 @@
     return out;
   }
   const colIndex = (ref) => { const m = /^([A-Z]+)(\d+)$/.exec(ref); let n = 0; for (const ch2 of m[1]) n = n * 26 + ch2.charCodeAt(0) - 64; return [n - 1, num(m[2]) - 1]; };
-  async function readLaufzettel() {
-    const res = await fetch(`https://docs.google.com/spreadsheets/d/${R.laufzettel.sheetId}/export?format=xlsx`, { cache: 'no-store' });
+  async function readXlsx(sheetId) {
+    const res = await fetch(`https://docs.google.com/spreadsheets/d/${sheetId}/export?format=xlsx`, { cache: 'no-store' });
     if (!res.ok) throw new Error('nicht lesbar');
     const buf = await res.arrayBuffer();
     if (new Uint8Array(buf)[0] !== 0x50) throw new Error('nicht lesbar');
@@ -596,7 +596,7 @@
   async function refreshLaufzettel(manual = false) {
     if (!S.chars.some((c) => c.laufName)) return;
     try {
-      const cells = await readLaufzettel();
+      const cells = await readXlsx(R.laufzettel.sheetId);
       lzStatus = '';
       const when = new Date().toLocaleString('de-DE', { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' });
       const msgs = [];
@@ -610,46 +610,92 @@
       if (msgs.length) lzStatus = msgs.join(' ');
       applyLaufzettel(true);
     } catch (e) {
+      if (manual === 'quiet') return;
       lzStatus = navigator.onLine ? 'Laufzettel nicht lesbar. Die DM muss ihn einmal freigeben: Teilen → Allgemeiner Zugriff → „Jeder, der über den Link verfügt“ (Betrachter).' : 'Offline – Laufzettel wird beim nächsten Laden mit Internet gelesen.';
       if (manual) alert(lzStatus);
       render();
     }
   }
-  // Werte aus dem Laufzettel in die Charaktere übernehmen (Level aus Punkten, Ausrichtung aus der Position).
+  // ---------- Level & Punkte aus „DnD_Orga_Punkte_NEU“ ----------
+  const ORGA_KEY = 'charakterbogen-orga';
+  let ORGA = (() => { try { return JSON.parse(localStorage.getItem(ORGA_KEY)) || {}; } catch (e) { return {}; } })();
+  let orgaStatus = '';
+  const low = (v) => String(v || '').trim().toLowerCase();
+  // Zeile eines Charakters: „Josh// Hicks“ → Charaktername nach „//“ (oder Spielername davor).
+  const rowMatches = (v, c) => {
+    if (typeof v !== 'string' || !v.trim()) return false;
+    const [pl, nm] = v.includes('//') ? v.split('//') : ['', v];
+    return low(nm) === low(c.name) || (!!pl && (low(pl) === low(c.laufName) || low(pl) === low(c.player)) && !nm.trim());
+  };
+  function orgaFor(cells, c) {
+    const at = (col, row) => cells.find((x) => x.col === col && x.row === row);
+    const out = {};
+    cells.filter((x) => low(x.value) === 'spieler').forEach((h) => {
+      // Überschriften rechts neben „Spieler“ in derselben Zeile
+      const heads = [];
+      for (let col = h.col + 1; col < h.col + 6; col++) { const x = at(col, h.row); if (!x || low(x.value) === 'spieler') break; heads.push([col, low(x.value)]); }
+      const rowCell = cells.find((x) => x.col === h.col && x.row > h.row && rowMatches(x.value, c));
+      if (!rowCell) return;
+      const val = (name) => { const hd = heads.find(([, t]) => t === name); if (!hd) return null; const x = at(hd[0], rowCell.row); const n = x ? parseFloat(x.value) : NaN; return Number.isFinite(n) ? n : null; };
+      if (heads.some(([, t]) => t === 'aktuelles level')) { out.level = val('aktuelles level'); out.points = val('punkte'); }
+      else if (heads.some(([, t]) => t === 'stufe')) { out.guild = val('stufe'); out.guildPoints = val('punkte'); }
+    });
+    return out.level !== undefined || out.guild !== undefined ? out : null;
+  }
+  async function refreshOrga(manual = false) {
+    try {
+      const cells = await readXlsx(R.orga.sheetId);
+      orgaStatus = '';
+      const when = new Date().toLocaleString('de-DE', { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' });
+      S.chars.forEach((c) => { const f = orgaFor(cells, c); if (f) ORGA[c.id] = { ...f, when }; });
+      try { localStorage.setItem(ORGA_KEY, JSON.stringify(ORGA)); } catch (e) { /* egal */ }
+      applyLaufzettel(true);
+    } catch (e) {
+      orgaStatus = navigator.onLine ? '„DnD_Orga_Punkte_NEU“ nicht lesbar. Die DM muss die Tabelle einmal freigeben: Teilen → Allgemeiner Zugriff → „Jeder, der über den Link verfügt“ (Betrachter). Bis dahin trägst du die Punkte selbst ein.' : '';
+      if (manual) alert(orgaStatus);
+      render();
+    }
+  }
+
   // ---------- Punkte, Level, Abenteurergilde ----------
-  const pointsOf = (c) => (c.lauf ? c.lauf.points : num(c.points));
+  // Die Punkte zählen pro Level: auf Level n braucht man R.levelPoints[n] Punkte für den Aufstieg.
+  const orgaOf = (c) => (c.orga && (c.orga.level !== null || c.orga.points !== null) ? c.orga : null);
+  const pointsOf = (c) => (orgaOf(c) && c.orga.points !== null ? c.orga.points : num(c.points));
+  const needFor = (lv) => R.levelPoints[lv];
   function levelBar(c) {
-    const p = pointsOf(c), lv = c.level, from = lv > 0 ? R.levelPoints[lv - 1] : 0, next = R.levelPoints[lv];
+    const p = pointsOf(c), next = needFor(c.level);
     const pct = next === undefined ? 100 : Math.max(0, Math.min(100, (p / next) * 100));
     return `<div class="lvbar" title="${p}/${next === undefined ? p : next} Punkte"><div class="bar"><i style="width:${pct}%"></i></div></div>`;
   }
-  // Info zum Level: aktuelle Punkte, alle Aufstiegsschwellen und Boni.
+  // Info zum Level: aktuelle Punkte, benötigte Punkte je Level und Boni.
   function levelInfo() {
     const c = ch(), p = pointsOf(c), res = klassOf(c).resource;
     const rows = R.levelPoints.map((need, i) => {
       const bo = bonusAt(i), done = c.level > i, now = c.level === i;
-      return `<tr class="${done ? 'done' : ''}${now ? ' now' : ''}"><td>${i + 1}</td><td>${need}</td><td>+${bo.lp}</td><td>+${bo.res}</td><td>+${bo.attr}</td></tr>`;
+      return `<tr class="${done ? 'done' : ''}${now ? ' now' : ''}"><td>${i} → ${i + 1}</td><td>${need}</td><td>+${bo.lp}</td><td>+${bo.res}</td><td>+${bo.attr}</td></tr>`;
     }).join('');
-    const next = R.levelPoints[c.level];
+    const next = needFor(c.level);
     openDialog(`<h3>Level ${c.level}</h3>
-      <p><b>${p}</b> Punkte${next !== undefined ? ` · nächstes Level ab <b>${next}</b> (noch ${next - p})` : ' · höchstes Level der Tabelle'}${c.lauf ? '<br><small class="hint">Punkte aus dem Laufzettel der DM.</small>' : ''}</p>
-      <table class="lvtable"><thead><tr><th>Level</th><th>ab Punkten</th><th>LP</th><th>${esc(res)}</th><th>Verteil-<br>punkte</th></tr></thead><tbody>${rows}</tbody></table>
-      <p class="hint">Die Boni gibt es beim Erreichen des jeweiligen Levels. Erreichte Level sind ausgegraut, das nächste ist hervorgehoben.</p>
+      <p><b>${p}</b>${next !== undefined ? ` / ${next}` : ''} Punkte auf diesem Level${next !== undefined ? ` (noch ${Math.max(0, next - p)} bis Level ${c.level + 1})` : ' · höchstes Level der Tabelle'}${orgaOf(c) ? '<br><small class="hint">Aus „DnD_Orga_Punkte_NEU“ der DM.</small>' : ''}</p>
+      <table class="lvtable"><thead><tr><th>Aufstieg</th><th>benötigte Punkte</th><th>LP</th><th>${esc(res)}</th><th>Verteil-<br>punkte</th></tr></thead><tbody>${rows}</tbody></table>
+      <p class="hint">Die Punkte zählen pro Level neu. Erreichte Aufstiege sind ausgegraut, der nächste ist hervorgehoben.</p>
       <div class="row end"><button class="btn" data-d-act="close">Schließen</button></div>`, () => dlg.close());
   }
   function pointsCard(c) {
-    const p = pointsOf(c), lv = c.level, from = lv > 0 ? R.levelPoints[lv - 1] : 0, next = R.levelPoints[lv];
-    const pct = next === undefined ? 100 : Math.max(0, Math.min(100, ((p - from) / (next - from)) * 100));
+    const p = pointsOf(c), lv = c.level, next = needFor(lv), o = orgaOf(c);
+    const pct = next === undefined ? 100 : Math.max(0, Math.min(100, (p / next) * 100));
     const actions = `<div class="pa"><div class="pa-row pa-head"><span class="grow"></span><span>regulär</span><span>besonders</span></div>${R.pointActions.map(([n, a, b], i) => `<div class="pa-row"><span class="grow">${esc(n)}</span>
         <span class="tag">${a}</span><span class="tag">${b}</span></div>`).join('')}
         </div>`;
     const log = c.pointsLog || [];
+    const guildFromOrga = c.orga && c.orga.guild !== null && c.orga.guild !== undefined;
     return `<section class="card" style="margin-top:12px">
-      <h2>Punkte & Level <small>Level ${lv} · ${p} Punkte</small></h2>
+      <h2>Punkte & Level <small>Level ${lv} · ${p}${next !== undefined ? ` / ${next}` : ''} Punkte</small></h2>
       <div class="bar"><i style="width:${pct}%"></i></div>
-      <p class="hint">${next === undefined ? 'Höchstes Level der Tabelle erreicht.' : `Noch ${next - p} Punkte bis Level ${lv + 1} (ab ${next}).`}${c.lauf ? ' Die Punkte kommen aus dem Laufzettel der DM.' : ''}</p>
+      <p class="hint">${next === undefined ? 'Höchstes Level der Tabelle erreicht.' : `Noch ${Math.max(0, next - p)} Punkte bis Level ${lv + 1}.`}${o ? ` Level und Punkte aus „DnD_Orga_Punkte_NEU“ (Stand ${esc(c.orga.when)}).` : ''}</p>
+      ${orgaStatus && !o ? `<p class="warn">${esc(orgaStatus)}</p>` : ''}
       <details><summary>Wofür gibt es Punkte?</summary>${actions}</details>
-      ${c.lauf ? '' : `<div class="pts-add">
+      ${o ? '' : `<div class="pts-add">
           <input type="text" inputmode="numeric" id="ptsAdj" placeholder="Punkte" aria-label="Punkte">
           <input type="text" id="ptsWhy" placeholder="Grund (optional)" aria-label="Grund">
           <button class="btn fill" data-act="ptsAdj" data-d="1">+ Hinzufügen</button>
@@ -658,40 +704,48 @@
           <span class="grow"><span class="${t.p > 0 ? 'plus' : 'minus'}">${t.p > 0 ? '+' : '−'}${Math.abs(t.p)}</span> ${esc(t.what)}<br><small>${esc(t.when)}</small></span>
           <button class="link danger" data-act="ptsUndo" data-i="${i}">zurücknehmen</button></div>`).join('')}` : ''}`}
       <div class="row" style="margin-top:12px; border-top:1px solid var(--line); padding-top:10px">
-        <span class="grow"><b>Abenteurergilde</b><br><small class="hint">Stufe ${num(c.guild)} von ${R.guildMax}</small></span>
-        <button class="btn small" data-act="guild" data-d="-1" aria-label="Gildenstufe senken">−</button>
+        <span class="grow"><b>Abenteurergilde</b><br><small class="hint">Stufe ${num(c.guild)} von ${R.guildMax}${guildFromOrga ? ` · aus der Tabelle der DM${c.orga.guildPoints !== null ? `, ${c.orga.guildPoints} Punkte` : ''}` : ''}</small></span>
+        ${guildFromOrga ? '' : '<button class="btn small" data-act="guild" data-d="-1" aria-label="Gildenstufe senken">−</button>'}
         <span class="lvl-box">${num(c.guild)}</span>
-        <button class="btn small" data-act="guild" data-d="1" aria-label="Gildenstufe erhöhen">+</button>
+        ${guildFromOrga ? '' : '<button class="btn small" data-act="guild" data-d="1" aria-label="Gildenstufe erhöhen">+</button>'}
       </div>
     </section>`;
   }
-  // Punkte buchen; Level ergibt sich aus den Punkten (mit Nachfrage beim Aufstieg).
+  // Punkte selbst buchen (nur ohne Tabelle der DM): pro Level gezählt, Aufstieg mit Nachfrage.
   function addPoints(p, what, undoIndex = -1) {
-    const c = ch(), before = num(c.points), after = Math.max(0, before + p);
-    const lv = levelFromPoints(after);
+    const c = ch();
+    let lv = c.level, pts = num(c.points) + p;
+    while (needFor(lv) !== undefined && pts >= needFor(lv)) { pts -= needFor(lv); lv++; }
+    while (pts < 0 && lv > 0) { lv--; pts += needFor(lv); }
+    pts = Math.max(0, pts);
     if (lv > c.level) {
       const bo = bonusAt(c.level);
       if (!confirm(`${what}: ${p > 0 ? '+' : ''}${p} Punkte.\n\nDamit erreicht ${c.name} Level ${lv}! (+${bo.lp} LP, +${bo.res} ${klassOf(c).resource}, ${bo.attr} Punkt(e) zum Verteilen)\n\nÜbernehmen?`)) return;
     } else if (lv < c.level && !confirm(`Damit sinkt ${c.name} auf Level ${lv}. Übernehmen?`)) return;
+    const up = lv > c.level;
     change((c) => {
-      c.points = after; c.level = lv;
+      c.points = pts; c.level = lv;
       const when = new Date().toLocaleString('de-DE', { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' });
       if (undoIndex >= 0) { c.pointsLog.splice(undoIndex, 1); return; }
-      c.pointsLog = [{ p: after - before, what, when, ts: Date.now() }, ...(c.pointsLog || [])].slice(0, 10);
+      c.pointsLog = [{ p, what, when, ts: Date.now() }, ...(c.pointsLog || [])].slice(0, 10);
     });
-    if (lv > levelFromPoints(before)) toast(`Levelaufstieg auf Level ${lv}!`);
+    if (up) toast(`Levelaufstieg auf Level ${lv}!`);
   }
 
+  // Werte der DM übernehmen: Ausrichtung aus dem Laufzettel, Level und Gilde aus „DnD_Orga_Punkte_NEU“.
   function applyLaufzettel(announce) {
     let up = '';
     S.chars.forEach((c) => {
       const f = c.laufName && LZ[c.id];
       c.lauf = f || null;
-      if (!f) return;
-      const lvl = levelFromPoints(f.points);
-      if (lvl > c.level && c.id === S.current) up = `Levelaufstieg auf Level ${lvl}!`;
-      c.level = lvl;
-      if (f.col !== null) c.sub = regionSub(c.klass, f.col, f.row);
+      if (f && f.col !== null) c.sub = regionSub(c.klass, f.col, f.row);
+      const o = ORGA[c.id];
+      c.orga = o || null;
+      if (o && o.level !== null && o.level !== undefined) {
+        if (o.level > c.level && c.id === S.current) up = `Levelaufstieg auf Level ${o.level}!`;
+        c.level = o.level;
+      }
+      if (o && o.guild !== null && o.guild !== undefined) c.guild = o.guild;
     });
     save(); render();
     if (announce && up) toast(up);
@@ -1038,7 +1092,7 @@
         const c = withIds({ chars: [PRESETS.find((x) => x.name === b.dataset.n).make()] }).chars[0];
         c.player = player;
         S.chars.push(c); S.current = c.id; S.tab = 'bogen'; dropDefault(); save(); render();
-        refreshLaufzettel();
+        refreshLaufzettel().then(() => refreshOrga('quiet'));
       }
       dlg.close();
     });
@@ -1265,7 +1319,7 @@
   const loadSync = () => { try { return JSON.parse(localStorage.getItem(SYNC_KEY)) || {}; } catch (e) { return {}; } };
   let Y = loadSync();
   const saveSync = () => { try { localStorage.setItem(SYNC_KEY, JSON.stringify(Y)); } catch (e) { /* kein Speicher */ } };
-  const shared = (st) => JSON.parse(JSON.stringify({ chars: st.chars.map(({ lauf, ...c }) => c), players: st.players || [], trash: (st.trash || []).map((t) => ({ ...t, char: (({ lauf, ...c }) => c)(t.char) })) }));
+  const shared = (st) => JSON.parse(JSON.stringify({ chars: st.chars.map(({ lauf, orga, ...c }) => c), players: st.players || [], trash: (st.trash || []).map((t) => ({ ...t, char: (({ lauf, orga, ...c }) => c)(t.char) })) }));
 
   // JSON mit sortierten Schlüsseln vergleichen
   const canon = (v) => JSON.stringify(v, (k, x) => (x && typeof x === 'object' && !Array.isArray(x) ? Object.keys(x).sort().reduce((o, key) => { o[key] = x[key]; return o; }, {}) : x));
@@ -1582,7 +1636,7 @@
   setTimeout(async () => {
     if (S.firstRun && !Y.token) await firstRunDialog();
     if (!skip && Y.token) await sync(true); else checkDuplicates();
-    if (!dlg.open) await refreshLaufzettel();
+    if (!dlg.open) { await refreshLaufzettel(); await refreshOrga(); }
   }, 300);
   // Meldung, die vor dem Neuladen nicht mehr zu sehen war (z. B. nach ⟳), noch einmal zeigen.
   try { const m = sessionStorage.getItem('cb-toast'); if (m) setTimeout(() => toast(m), 200); } catch (e) { /* egal */ }

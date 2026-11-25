@@ -6,7 +6,7 @@ window.RULES = {
   lpPerLevel: 1,
   resourcePerLevel: 1,
   equipmentSlots: 9,  // Ausrüstungsslots (Namen sind in der App frei wählbar)
-  // Level (Tabelle „DnD_Orga_Punkte_NEU“): Punkte, ab denen das nächste Level erreicht ist (Level 0 → 1 ab 5 Punkten …).
+  // Level (Tabelle „DnD_Orga_Punkte_NEU“): Punkte, die auf Level n für den Aufstieg auf n+1 nötig sind (Level 0: 5, Level 1: 10 …).
   levelPoints: [5, 10, 15, 20, 25, 30, 36, 42, 48, 54, 60, 67, 74, 81, 88, 95, 103, 111, 119, 127, 135],
   // Boni pro Aufstieg, je nach Level, von dem aus aufgestiegen wird.
   levelBonus: [
@@ -32,6 +32,9 @@ window.RULES = {
   // Wechselkurse: 1000 Kupfer = 1 Silber, 1000 Silber = 1 Gold
   exchange: { kPerS: 1000, sPerG: 1000 },
   guildMax: 10,   // Abenteurergilde: Stufe 0–10
+  // Level und Levelpunkte der DM (Google-Tabelle „DnD_Orga_Punkte_NEU“): Spalten Spieler | Punkte | aktuelles Level,
+  // dazu der Block „Abenteurergilde“ (Spieler | Stufe | Punkte). Spielername in der Form „Josh// Hicks“.
+  orga: { sheetId: '11kz9gymEB9KrL20AHW6Yk1lZhTp3Cwmj2I2dlDK8gak' },
   // Laufzettel der DM (Google-Tabelle): rote Zahl = Position auf dem Ausrichtungs-Chart, Summe = Punkte.
   laufzettel: { sheetId: '1Bucq40p-VDb47HDRdqjeQQpJTg0EFQ1WSLrpbkA1arA', grid: 15, region: 5 },
   inventorySlots: 3,   // Grund-Inventarslots, + 1 je Stufe Traglast, + Ausbau
