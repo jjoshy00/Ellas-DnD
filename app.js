@@ -323,7 +323,11 @@
           ${(() => {
             const sf = techStufe(c, t), nx = techNext(t), capped = t.diff !== 'sonstiges' && techRaw(t) > sf;
             const from = sf > 0 ? (R.thresholds[t.diff] || [])[sf - 1] || 0 : 0;
-            return `<div class="hint">Stufe <b>${sf}</b> = Würfelbonus +${sf} · ${num(t.punkte)} Punkte${t.diff === 'sonstiges' ? '' : nx !== undefined && !capped ? ` (Stufe ${sf + 1} ab ${nx})` : ''}${t.note ? ' · ' + esc(t.note) : ''}</div>
+            return `<div class="tstats">
+                <div><span>Stufe</span><b>${sf}</b><small>Würfelbonus +${sf}</small></div>
+                <div><span>Punkte</span><b>${num(t.punkte)}</b><small>${t.diff === 'sonstiges' ? 'Stufe von Hand' : nx !== undefined && !capped ? `Stufe ${sf + 1} ab ${nx}` : capped ? 'Lehrmeister nötig' : 'höchste Stufe'}</small></div>
+              </div>
+              ${t.note ? `<div class="hint">${esc(t.note)}</div>` : ''}
               ${t.diff !== 'sonstiges' && nx !== undefined && !capped ? `<div class="bar"><i style="width:${Math.max(0, Math.min(100, ((num(t.punkte) - from) / (nx - from)) * 100))}%"></i></div>` : ''}
               ${capped || (sf >= R.freeMaxForeign && techCap(c, t) === R.freeMaxForeign) ? `<p class="hint">Frei nur bis Stufe ${R.freeMaxForeign} (nicht deine Klasse). Weiter mit Lehrmeister: Haken unter „Bearbeiten“.</p>` : ''}`;
           })()}
@@ -332,7 +336,7 @@
             <button class="btn small fill" data-act="applyTech" data-id="${t.id}">Anwenden</button>
           </div></div>`;
       }).join('') : '<p class="hint">Noch keine Einträge.</p>'}
-      <p class="hint">„Anwenden“: Würfelergebnis eintragen, die App rechnet Ergebnis und Punkte aus. Erst nach deiner Bestätigung bekommt jedes Feld ${sheet.listName === 'Zauber' ? 'des Zaubers' : 'der Technik'} im Kreis die Punkte.</p>
+      <p class="hint">„Anwenden“: Würfelergebnis eintragen, die App rechnet Ergebnis und Punkte aus. Erst nach deiner Bestätigung bekommen ${sheet.listName === 'Zauber' ? 'der Zauber' : 'die Technik'} und ${sheet.listName === 'Zauber' ? 'seine' : 'ihre'} Felder im Kreis die Punkte; die Stufen steigen automatisch.</p>
     </section>`;
   }
 
