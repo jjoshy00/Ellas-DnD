@@ -218,3 +218,7 @@ details summary { cursor: pointer; color: var(--c); font-size: .9rem; margin-top
 .result { margin: 10px 0; padding: 10px; border-radius: 10px; background: var(--cl); line-height: 1.6; }
 
 .cost { border-top: 1px solid var(--line); margin-top: 8px; padding-top: 8px; }
+
+.pts-add { display: grid; grid-template-columns: 80px 1fr; gap: 6px; margin-top: 10px; }
+.pts-add #ptsAdj { text-align: center; }
+.pts-add .btn { grid-column: 1 / -1; }

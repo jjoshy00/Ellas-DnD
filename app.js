@@ -498,18 +498,18 @@
     const p = pointsOf(c), lv = c.level, from = lv > 0 ? R.levelPoints[lv - 1] : 0, next = R.levelPoints[lv];
     const pct = next === undefined ? 100 : Math.max(0, Math.min(100, ((p - from) / (next - from)) * 100));
     const actions = `<div class="pa"><div class="pa-row pa-head"><span class="grow"></span><span>regulär</span><span>besonders</span></div>${R.pointActions.map(([n, a, b], i) => `<div class="pa-row"><span class="grow">${esc(n)}</span>
-        ${c.lauf ? `<span class="tag">${a}</span><span class="tag">${b}</span>` : `<button class="btn small" data-act="pts" data-a="${i}" data-k="0">+${a}</button><button class="btn small fill" data-act="pts" data-a="${i}" data-k="1">+${b}</button>`}</div>`).join('')}
+        <span class="tag">${a}</span><span class="tag">${b}</span></div>`).join('')}
         </div>`;
     const log = c.pointsLog || [];
     return `<section class="card" style="margin-top:12px">
       <h2>Punkte & Level <small>Level ${lv} · ${p} Punkte</small></h2>
       <div class="bar"><i style="width:${pct}%"></i></div>
       <p class="hint">${next === undefined ? 'Höchstes Level der Tabelle erreicht.' : `Noch ${next - p} Punkte bis Level ${lv + 1} (ab ${next}).`}${c.lauf ? ' Die Punkte kommen aus dem Laufzettel der DM.' : ''}</p>
-      ${c.lauf ? `<details><summary>Wofür gibt es Punkte?</summary>${actions}</details>` : `${actions}
-        <div class="item-adj" style="justify-content:flex-start">
-          <span class="hint" style="margin:0">Korrektur:</span>
-          <input type="text" inputmode="numeric" class="adj-amt" id="ptsAdj" placeholder="Punkte">
-          <button class="btn small" data-act="ptsAdj" data-d="1">+</button><button class="btn small" data-act="ptsAdj" data-d="-1">−</button>
+      <details><summary>Wofür gibt es Punkte?</summary>${actions}</details>
+      ${c.lauf ? '' : `<div class="pts-add">
+          <input type="text" inputmode="numeric" id="ptsAdj" placeholder="Punkte" aria-label="Punkte">
+          <input type="text" id="ptsWhy" placeholder="Grund (optional)" aria-label="Grund">
+          <button class="btn fill" data-act="ptsAdj" data-d="1">+ Hinzufügen</button>
         </div>
         ${log.length ? `<div class="group-h" style="margin-top:10px">Letzte Punkte</div>${log.map((t, i) => `<div class="tx row" style="flex-direction:row">
           <span class="grow"><span class="${t.p > 0 ? 'plus' : 'minus'}">${t.p > 0 ? '+' : '−'}${Math.abs(t.p)}</span> ${esc(t.what)}<br><small>${esc(t.when)}</small></span>
@@ -974,7 +974,7 @@
       case 'ptsAdj': {
         const v = num(($('#ptsAdj').value || '').replace(/\D/g, ''));
         if (!v) return alert('Bitte eine Punktzahl eintragen.');
-        return addPoints(d * v, 'Korrektur');
+        return addPoints(d * v, ($('#ptsWhy').value || '').trim() || 'Punkte');
       }
       case 'ptsUndo': {
         const t = (ch().pointsLog || [])[i];
