@@ -189,7 +189,8 @@
     </section>
 
     <section class="stats">
-      ${stat('Lebenspunkte', cur(c.lpCur, lm), lm, 'lp')}
+      <div class="stat"><div class="lbl">Lebenspunkte</div><div class="val">${cur(c.lpCur, lm)}<small> / ${lm}</small></div>
+        <div class="lvbar"><div class="bar lp"><i style="width:${lm ? (cur(c.lpCur, lm) / lm) * 100 : 0}%"></i></div></div></div>
       ${stat(k.resource, cur(c.resCur, rm), rm, 'res')}
       <div class="stat stat-info"><button class="info-i" data-act="levelInfo" aria-label="Level-Infos">i</button><div class="lbl">Level</div><div class="val">${c.level}</div>
         ${levelBar(c)}</div>
@@ -200,6 +201,7 @@
     </section>
     ${free < 0 ? '<p class="warn">Es sind mehr Punkte verteilt, als das Level hergibt.</p>' : ''}
 
+    ${lpCard(c)}
     ${pointsCard(c)}
     ${alignCard(c)}
     <section class="card" style="margin-top:12px">
@@ -341,6 +343,39 @@
         <small>${esc(t.when)}${t.note ? ' · ' + esc(t.note) : ''}</small></div>`).join('')}` : ''}
     </section>`;
   }
+  // Lebenspunkte: Schaden/Heilung über ein Feld, letzte 10 Änderungen im Protokoll.
+  function lpCard(c) {
+    const lm = lpMax(c), log = c.lpLog || [];
+    return `<section class="card" style="margin-top:12px">
+      <h2>Lebenspunkte <small>${cur(c.lpCur, lm)} / ${lm}</small></h2>
+      <div class="pts-add">
+        <input type="text" inputmode="numeric" data-lp="amt" placeholder="LP" aria-label="Lebenspunkte">
+        <input type="text" data-lp="note" placeholder="Anmerkung (optional)" aria-label="Anmerkung">
+      </div>
+      <div class="row" style="margin-top:6px">
+        <button class="btn danger grow" data-act="lpTx" data-d="-1">− Schaden</button>
+        <button class="btn fill grow" data-act="lpTx" data-d="1">+ Heilung</button>
+      </div>
+      ${log.length ? `<div class="group-h" style="margin-top:12px">Letzte Änderungen</div>${log.map((t) => `<div class="tx">
+        <span class="${t.d > 0 ? 'plus' : 'minus'}">${t.d > 0 ? '+' : '−'} ${t.v} LP <small class="hint">→ ${t.after}</small></span>
+        <small>${esc(t.when)}${t.note ? ' · ' + esc(t.note) : ''}</small></div>`).join('')}` : ''}
+    </section>`;
+  }
+  function lpBooking(d, btn) {
+    const box = btn.closest('.card'), c = ch(), lm = lpMax(c), now = cur(c.lpCur, lm);
+    const v = num((box.querySelector('[data-lp="amt"]').value || '').replace(/\D/g, ''));
+    if (!v) return alert('Bitte die Lebenspunkte eintragen.');
+    const after = Math.max(0, Math.min(lm, now + d * v));
+    if (after === now) return toast(d > 0 ? 'Die Lebenspunkte sind schon voll.' : 'Die Lebenspunkte sind schon bei 0.');
+    if (d < 0 && after === 0 && !confirm(`Damit sinken die Lebenspunkte auf 0. Übernehmen?`)) return;
+    const note = box.querySelector('[data-lp="note"]').value.trim();
+    change((c) => {
+      c.lpCur = after;
+      const when = new Date().toLocaleString('de-DE', { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' });
+      c.lpLog = [{ d, v: Math.abs(after - now), after, note, when, ts: Date.now() }, ...(c.lpLog || [])].slice(0, 10);
+    });
+  }
+
   // Bezahlen mit automatischem Wechseln (größere Münzen werden nur so weit wie nötig gewechselt).
   const moneyText = (m) => COINS.map(([k, n]) => `${num(m[k])} ${n}`).join(', ');
   function payWithChange(money, amt, d) {
@@ -1076,6 +1111,7 @@
     const d = num(b.dataset.d), i = num(b.dataset.i);
     switch (b.dataset.act) {
       case 'lp': return change((c) => { const m = lpMax(c); c.lpCur = Math.max(0, Math.min(m, cur(c.lpCur, m) + d)); });
+      case 'lpTx': return lpBooking(d, b);
       case 'res': return change((c) => { const m = resMax(c); c.resCur = Math.max(0, Math.min(m, cur(c.resCur, m) + d)); });
       case 'level': {
         const c = ch(), to = c.level + d;
@@ -1243,7 +1279,7 @@
       const removed = new Set((Array.isArray(b) ? b : []).map((t) => t.id).filter((id) => !l.some((t) => t.id === id) || !r.some((t) => t.id === id)));
       return [...m.values()].filter((t) => !removed.has(t.id)).sort((x, y) => num(y.ts) - num(x.ts)).slice(0, 5);
     }
-    if ((last === 'moneyLog' || last === 'pointsLog') && Array.isArray(l) && Array.isArray(r)) {
+    if ((last === 'moneyLog' || last === 'pointsLog' || last === 'lpLog') && Array.isArray(l) && Array.isArray(r)) {
       const seen = new Set(), all = [];
       [...l, ...r].forEach((t) => { const k = canon(t); if (!seen.has(k)) { seen.add(k); all.push(t); } });
       return all.sort((x, y) => num(y.ts) - num(x.ts)).slice(0, 10);
@@ -1281,7 +1317,7 @@
     resCur: 'Ressource', resBase: 'Ressource Start', resExtra: 'Ressource Zusatz', atk: 'ATK', def: 'DEF', saves: 'Rettungswürfe', vorteil: 'Vorteil', nachteil: 'Nachteil',
     money: 'Geld', moneyLog: 'Buchungen', attrSlots: 'Levelpunkte', classSlots: 'Klassenpunkte', aspects: 'Übungskreise', techniques: 'Techniken', items: 'Inventar',
     freeItems: 'Ohne Inventarslot', equip: 'Ausrüstung', notes: 'Notizen', slotExtra: 'Slot-Ausbau', stufe: 'Stufe', punkte: 'Punkte', skill: 'Fähigkeit', qty: 'Anzahl',
-    note: 'Notiz', points: 'Punkte', pointsLog: 'Punkte-Verlauf', guild: 'Abenteurergilde', laufName: 'Name im Laufzettel', label: 'Slot-Name', item: 'Gegenstand', diff: 'Schwierigkeit', klass: 'Klasse', from: 'Ausrichtung' };
+    note: 'Notiz', points: 'Punkte', pointsLog: 'Punkte-Verlauf', lpLog: 'LP-Verlauf', guild: 'Abenteurergilde', laufName: 'Name im Laufzettel', label: 'Slot-Name', item: 'Gegenstand', diff: 'Schwierigkeit', klass: 'Klasse', from: 'Ausrichtung' };
   const pathText = (path) => path.filter((p) => p !== 'chars').map((p) => (typeof p === 'object' ? p.name || 'Eintrag' : typeof p === 'number' ? `Nr. ${p + 1}` : FIELD[p] || p)).join(' › ');
   function shown(v) {
     if (v === undefined || v === null) return v === undefined ? '(gelöscht)' : '(voll)';
