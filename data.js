@@ -294,7 +294,7 @@ window.RULES = {
   ],
   rollPoints: [{ max: 6, points: 1 }, { max: 13, points: 2 }, { max: 999, points: 3 }],
   diffDice: { leicht: 4, mittel: 6, schwer: 8 },
-  difficulties: { leicht: 'leicht (W4)', mittel: 'mittel (W6)', schwer: 'schwer (W8)' },
+  difficulties: { leicht: 'leicht', mittel: 'mittel', schwer: 'schwer', sonstiges: 'Sonstiges' },
 
   // Benötigte Punkte für den Aufstieg von Stufe n auf n+1 (Index n), Punktegebung-Dokumente.
   // Kreise (Grundwerte, Spalte „W20“): je Bogen; Techniken: nach Schwierigkeit.

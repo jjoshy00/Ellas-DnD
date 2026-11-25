@@ -240,3 +240,4 @@ details summary { cursor: pointer; color: var(--c); font-size: .9rem; margin-top
 .ro { margin-bottom: 8px; min-width: 0; }
 .ro span { display: block; font-size: .75rem; color: var(--muted); }
 .ro b { display: block; font-weight: 600; overflow-wrap: anywhere; }
+[hidden] { display: none !important; }

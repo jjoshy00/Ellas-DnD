@@ -262,7 +262,7 @@
         const pct = need ? Math.min(100, (t.punkte / need) * 100) : 100;
         const aspects = t.aspects.map((k) => k.split('.').slice(2).join('.'));
         return `<div class="tech">
-          <div class="head"><b>${esc(t.name)}</b><span class="tag">${esc(R.difficulties[t.diff] || t.diff)}</span></div>
+          <div class="head"><b>${esc(t.name)}</b><span class="tag">${esc(diffLabel(t))}</span></div>
           <div>${aspects.map((a) => `<span class="tag">${esc(a)}</span>`).join('') || '<span class="hint">belegt keine Abschnitte</span>'}</div>
           <div class="hint">Stufe ${t.stufe} · ${t.punkte}${need ? ` / ${need}` : ''} Punkte bis zur nächsten Stufe${t.note ? ' · ' + esc(t.note) : ''}</div>
           <div class="bar"><i style="width:${pct}%"></i></div>
@@ -751,7 +751,7 @@
   function applyDialog(id) {
     const t = (ch().techniques[S.sheet] || []).find((x) => x.id === id);
     if (!t) return;
-    const die = R.diffDice[t.diff] || 4;
+    const die = '';
     let w20 = '', dmg = '', pts = null;
     const calc = () => {
       const roll = num(w20, 0);
@@ -770,16 +770,16 @@
     const draw = () => {
       const r = calc();
       return `<h3>${esc(t.name)} anwenden</h3>
-        <p class="hint">${esc(R.difficulties[t.diff] || t.diff)} · Stufe ${t.stufe} = Würfelbonus +${t.stufe}</p>
+        <p class="hint">${esc(diffLabel(t))} · Stufe ${t.stufe} = Würfelbonus +${t.stufe}</p>
         <div class="grid2">
           <label class="f">W20-Wurf<input id="w20" type="text" inputmode="numeric" value="${esc(w20)}" placeholder="1–20"></label>
-          <label class="f">W${die}-Wurf (Schaden/Qualität, optional)<input id="wd" type="text" inputmode="numeric" value="${esc(dmg)}" placeholder="1–${die}"></label>
+          <label class="f">Schadens-/Qualitätswurf (optional)<input id="wd" type="text" inputmode="numeric" value="${esc(dmg)}" placeholder="Wurf"></label>
         </div>
         <button class="btn" data-d-act="calc">Ausrechnen</button>
         ${r ? `<div class="result">
           <div>Wurf ${r.roll} + Bonus ${t.stufe} = <b>${r.total}</b></div>
           <div>Ergebnis: <b>${esc(r.out.text)}</b></div>
-          ${r.dmgText ? `<div>W${die}: ${esc(r.dmgText)}</div>` : ''}
+          ${r.dmgText ? `<div>Schaden/Qualität: ${esc(r.dmgText)}</div>` : ''}
           <div>Punkte laut Tabelle: <b>${r.points}</b> <small class="hint">(0–6 → 1, 7–13 → 2, 14–20 → 3)</small></div>
         </div>
         <p class="hint">Mit der DM klären und bei Bedarf ändern:</p>
@@ -809,6 +809,8 @@
     });
   }
 
+  const diffLabel = (t) => (t.diff === 'sonstiges' ? (t.diffText || 'Sonstiges') : R.difficulties[t.diff] || t.diff);
+
   function editTech(id) {
     const c = ch(), sheet = sheetDef(S.sheet);
     const list = (c.techniques[sheet.key] ||= []);
@@ -816,7 +818,8 @@
     const own = sheet.klass === c.klass;
     openDialog(`<h3>${t.id ? 'Bearbeiten' : sheet.listName === 'Zauber' ? 'Neuer Zauber' : 'Neue Technik'}</h3>
       <label class="f">Name<input id="tn" value="${esc(t.name)}"></label>
-      <label class="f">Schwierigkeit<select id="td">${Object.entries(R.difficulties).map(([key, v]) => `<option value="${key}"${key === t.diff ? ' selected' : ''}${!own && key !== 'leicht' ? ' disabled' : ''}>${v}</option>`).join('')}</select></label>
+      <label class="f">Schwierigkeit<select id="td">${Object.entries(R.difficulties).map(([key, v]) => `<option value="${key}"${key === t.diff ? ' selected' : ''}${!own && key !== 'leicht' && key !== 'sonstiges' ? ' disabled' : ''}>${v}</option>`).join('')}</select></label>
+      <label class="f" id="tdxw"${t.diff === 'sonstiges' ? '' : ' hidden'}>Sonstiges (Freitext)<input id="tdx" value="${esc(t.diffText || '')}" placeholder="z. B. mit der DM vereinbart"></label>
       <p class="hint">Welche Abschnitte belegt sie? Beim Anwenden bekommt jeder die vergebenen Punkte.</p>
       ${sheet.charts.map((ct) => `${ct.label ? `<div class="group-h">${esc(ct.label)}</div>` : ''}<div class="aspect-pick">${ct.aspects.map((a) => {
         const key = aspectKey(sheet.key, ct.key, a);
@@ -838,7 +841,7 @@
       if (act === 'ok') {
         const name = $('#tn', dlg).value.trim();
         if (!name) return $('#tn', dlg).focus();
-        const upd = { id: t.id || uid(), name, diff: $('#td', dlg).value, stufe: Math.max(0, num($('#ts', dlg).value)), punkte: Math.max(0, num($('#tp', dlg).value)),
+        const upd = { id: t.id || uid(), name, diff: $('#td', dlg).value, diffText: $('#td', dlg).value === 'sonstiges' ? $('#tdx', dlg).value.trim() : '', stufe: Math.max(0, num($('#ts', dlg).value)), punkte: Math.max(0, num($('#tp', dlg).value)),
           aspects: [...dlg.querySelectorAll('.aspect-pick input:checked')].map((x) => x.value), note: $('#tt', dlg).value.trim() };
         const cost = t.id ? 0 : num(($('#tc', dlg).value || '').replace(/\D/g, ''), 0);
         const payId = t.id ? '' : $('#tcs', dlg).value;
@@ -856,6 +859,8 @@
       }
       dlg.close();
     });
+    const sel = $('#td', dlg);
+    sel.onchange = () => { $('#tdxw', dlg).hidden = sel.value !== 'sonstiges'; if (sel.value === 'sonstiges') $('#tdx', dlg).focus(); };
   }
 
   // Charakterangaben nachträglich bearbeiten (bewusst nur über den kleinen ✎-Knopf).
