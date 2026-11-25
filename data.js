@@ -299,8 +299,6 @@ window.RULES = {
   ],
   rollPoints: [{ max: 6, points: 1 }, { max: 13, points: 2 }, { max: 999, points: 3 }],
   diffDice: { leicht: 4, mittel: 6, schwer: 8 },
-  // Kosten, um eine neue Technik zu lernen (Punktegebung Handwerk: leicht 5, mittel 20, schwer 50).
-  buyCost: { handwerk: { leicht: 5, mittel: 20, schwer: 50 } },
   freeMaxForeign: 3,   // fremde Klasse: freier Ausbau einer Technik höchstens bis Stufe 3
   difficulties: { leicht: 'leicht', mittel: 'mittel', schwer: 'schwer', sonstiges: 'Sonstiges' },
 

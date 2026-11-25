@@ -122,8 +122,12 @@
   const ringName = (k) => k.split('.').slice(2).join('.');
   // Stufe einer Technik = niedrigste Stufe ihrer Felder (Würfelbonus beim Anwenden).
   // Stufe einer Technik = Würfelbonus; ausgebaut wird sie mit Punkten (Kosten je Stufe nach Schwierigkeit).
-  const techStufe = (c, t) => num(t.stufe);
-  const upCost = (t) => (R.thresholds[t.diff] || [])[num(t.stufe)];
+  // Technik: sammelt eigene Punkte (nie ausgegeben); Stufe steigt automatisch nach der Tabelle ihrer Schwierigkeit.
+  // Fremde Klasse: frei nur bis Stufe 3, darüber nur mit Lehrmeister (Haken in „Bearbeiten“).
+  const techCap = (c, t, sheetKey) => (sheetDef(sheetKey || S.sheet).klass !== c.klass && !t.teacher ? R.freeMaxForeign : 15);
+  const techRaw = (t) => (R.thresholds[t.diff] || []).filter((x) => num(t.punkte) >= x).length;
+  const techStufe = (c, t, sheetKey) => (t.diff === 'sonstiges' ? num(t.stufe) : Math.min(techRaw(t), techCap(c, t, sheetKey)));
+  const techNext = (t) => (R.thresholds[t.diff] || [])[techRaw(t)];
   const baseNeed = (sheet, stufe) => (R.baseThresholds[sheetDef(sheet).thresholds] || R.baseThresholds.normal)[stufe];
 
   function teachNote(stufe) {
@@ -316,10 +320,15 @@
         return `<div class="tech">
           <div class="head"><b>${esc(t.name)}</b><span class="tag">${esc(diffLabel(t))}</span></div>
           <div>${t.aspects.map((k) => `<span class="tag">${esc(ringName(k))} · Stufe ${ringStufe(k, c.aspects[k])}</span>`).join('') || '<span class="hint">belegt keine Felder</span>'}</div>
-          <div class="hint">Stufe ${num(t.stufe)} = Würfelbonus +${num(t.stufe)}${t.note ? ' · ' + esc(t.note) : ''}</div>
+          ${(() => {
+            const sf = techStufe(c, t), nx = techNext(t), capped = t.diff !== 'sonstiges' && techRaw(t) > sf;
+            const from = sf > 0 ? (R.thresholds[t.diff] || [])[sf - 1] || 0 : 0;
+            return `<div class="hint">Stufe <b>${sf}</b> = Würfelbonus +${sf} · ${num(t.punkte)} Punkte${t.diff === 'sonstiges' ? '' : nx !== undefined && !capped ? ` (Stufe ${sf + 1} ab ${nx})` : ''}${t.note ? ' · ' + esc(t.note) : ''}</div>
+              ${t.diff !== 'sonstiges' && nx !== undefined && !capped ? `<div class="bar"><i style="width:${Math.max(0, Math.min(100, ((num(t.punkte) - from) / (nx - from)) * 100))}%"></i></div>` : ''}
+              ${capped || (sf >= R.freeMaxForeign && techCap(c, t) === R.freeMaxForeign) ? `<p class="hint">Frei nur bis Stufe ${R.freeMaxForeign} (nicht deine Klasse). Weiter mit Lehrmeister: Haken unter „Bearbeiten“.</p>` : ''}`;
+          })()}
           <div class="row end" style="margin-top:8px">
             <button class="btn small" data-act="editTech" data-id="${t.id}">Bearbeiten</button>
-            <button class="btn small" data-act="techUp" data-id="${t.id}">Ausbauen${upCost(t) ? ` (${upCost(t)} P)` : ''}</button>
             <button class="btn small fill" data-act="applyTech" data-id="${t.id}">Anwenden</button>
           </div></div>`;
       }).join('') : '<p class="hint">Noch keine Einträge.</p>'}
@@ -844,7 +853,7 @@
         <div class="stat"><div class="lbl">Gesammelte Punkte</div><div class="val">${st.punkte}${need ? `<small> / ${need}</small>` : ''}</div>
           <div class="stepper"><button class="btn" data-d-act="punkte" data-v="-1">−</button><button class="btn" data-d-act="punkte" data-v="1">+</button><button class="btn" data-d-act="punkte" data-v="5">+5</button></div></div>
       </div>
-      <p class="hint">Verfügbar für Lernkosten: <b>${ringAvail(st)}</b>${num(st.spent) ? ` (${st.spent} ausgegeben)` : ''}.${teachNote(sf) ? ' ' + esc(teachNote(sf)) : ''}</p>
+      <p class="hint">Die Ringe steigen automatisch mit den gesammelten Punkten.</p>
       <div class="row end" style="margin-top:12px"><button class="btn" data-d-act="close">Fertig</button></div>`;
     };
     openDialog(draw(), (act, b) => {
@@ -892,7 +901,7 @@
         </div>
         <p class="hint">Mit der DM klären und bei Bedarf ändern:</p>
         <label class="f">Punkte, die vergeben werden<input id="pts" type="text" inputmode="numeric" value="${pts ?? r.points}"></label>
-        <p class="hint">Bekommen: ${t.aspects.length ? t.aspects.map(ringName).join(', ') : 'keine Felder belegt'}.</p>` : ''}
+        <p class="hint">Bekommen: ${esc(t.name)}${t.aspects.length ? ' und die Felder ' + t.aspects.map(ringName).join(', ') : ''}.</p>` : ''}
         <div class="row end"><button class="btn" data-d-act="close">Abbrechen</button>${r ? '<button class="btn fill" data-d-act="ok">Punkte vergeben</button>' : ''}</div>`;
     };
     openDialog(draw(), (act) => {
@@ -909,56 +918,18 @@
         change((c) => {
           const tt = (c.techniques[S.sheet] || []).find((x) => x.id === id);
           if (!tt) return;
+          const b0 = techStufe(c, tt);
+          tt.punkte = num(tt.punkte) + p;
+          if (techStufe(c, tt) > b0) ups.push(`${tt.name} Stufe ${techStufe(c, tt)}`);
           tt.aspects.forEach((k) => {
             const st = aspectState(c, k), before = ringStufe(k, st);
             st.punkte += p;
             if (ringStufe(k, st) > before) ups.push(`${ringName(k)} Stufe ${ringStufe(k, st)}`);
           });
         });
-        return toast(`${p} Punkt(e) je Feld vergeben.${ups.length ? ' Aufstieg: ' + ups.join(', ') + '!' : ''}`);
+        return toast(`${p} Punkt(e) vergeben.${ups.length ? ' Aufstieg: ' + ups.join(', ') + '!' : ''}`);
       }
       dlg.close();
-    });
-  }
-
-  // Technik ausbauen: Kosten laut Tabelle (Vorschlag, änderbar), bezahlt aus den verfügbaren Punkten eines Feldes.
-  function techUpDialog(id) {
-    const c = ch(), sheet = sheetDef(S.sheet), t = (c.techniques[sheet.key] || []).find((x) => x.id === id);
-    if (!t) return;
-    const st0 = num(t.stufe), to = st0 + 1, own = sheet.klass === c.klass;
-    if (to > 15) return alert('Höchste Stufe erreicht.');
-    let note = '';
-    if (!own && st0 >= R.freeMaxForeign) {
-      if (!confirm(`Nicht deine Klasse: Frei ausbauen geht nur bis Stufe ${R.freeMaxForeign}.\n\nHast du einen Lehrmeister, der dir Stufe ${to} beibringt?`)) return;
-      note = 'mit Lehrmeister';
-    } else if (st0 >= R.masterFrom) {
-      if (!confirm(`Stufe ${to} ist eine Meisterstufe: dafür musst du bei einem Meister in die Lehre gehen.\n\nIst das erfüllt?`)) return;
-      note = 'beim Meister';
-    } else if (st0 >= R.teacherFrom) {
-      if (!confirm(`Ab Stufe ${R.teacherFrom} braucht es jemanden, der die nächste Stufe beibringt.\n\nIst das erfüllt?`)) return;
-      note = 'mit Lehrmeister';
-    }
-    const payable = Object.entries(c.aspects).filter(([k, st]) => k.startsWith(sheet.key + '.') && ringAvail(st) > 0)
-      .sort((a, b) => (t.aspects.includes(b[0]) - t.aspects.includes(a[0])) || ringAvail(b[1]) - ringAvail(a[1]));
-    const cost = upCost(t);
-    openDialog(`<h3>${esc(t.name)} auf Stufe ${to}</h3>
-      <p class="hint">${esc(diffLabel(t))}${cost ? ` · laut Tabelle ${cost} Punkte` : ' · keine Tabelle für diese Schwierigkeit, Kosten mit der DM klären'}${note ? ' · ' + note : ''}</p>
-      <label class="f">Kosten (Punkte)<input id="uc" type="text" inputmode="numeric" value="${cost || ''}"></label>
-      <label class="f">Bezahlt mit den Punkten von Feld<select id="ucs">${payable.length ? payable.map(([k, st]) => `<option value="${esc(k)}">${esc(ringName(k))} (${ringAvail(st)} verfügbar)</option>`).join('') : '<option value="">– noch keine Punkte gesammelt –</option>'}</select></label>
-      <div class="row end"><button class="btn" data-d-act="close">Abbrechen</button><button class="btn fill" data-d-act="ok">Ausbauen</button></div>`,
-    (act) => {
-      if (act !== 'ok') return dlg.close();
-      const k = num(($('#uc', dlg).value || '').replace(/\D/g, ''), 0), from = $('#ucs', dlg).value;
-      if (k && !from) return alert('Es gibt noch kein Feld mit verfügbaren Punkten.');
-      const st = from && c.aspects[from];
-      if (k && ringAvail(st) < k && !confirm(`„${ringName(from)}“ hat nur ${ringAvail(st)} verfügbare Punkte. Trotzdem ausbauen?`)) return;
-      dlg.close();
-      change((c) => {
-        const tt = (c.techniques[sheet.key] || []).find((x) => x.id === id);
-        tt.stufe = to;
-        if (k) { const a = aspectState(c, from); a.spent = Math.min(num(a.punkte), num(a.spent) + k); }
-      });
-      toast(`${t.name}: Stufe ${to}${k ? ` (${k} Punkte ausgegeben)` : ''}.`);
     });
   }
 
@@ -969,7 +940,6 @@
     const list = (c.techniques[sheet.key] ||= []);
     const t = list.find((x) => x.id === id) || { id: '', name: '', diff: 'leicht', stufe: 0, punkte: 0, aspects: [], note: '' };
     const own = sheet.klass === c.klass;
-    const payable = Object.entries(c.aspects).filter(([k, st]) => k.startsWith(sheet.key + '.') && ringAvail(st) > 0).sort((a, b) => ringAvail(b[1]) - ringAvail(a[1]));
     openDialog(`<h3>${t.id ? 'Bearbeiten' : sheet.listName === 'Zauber' ? 'Neuer Zauber' : 'Neue Technik'}</h3>
       <label class="f">Name<input id="tn" value="${esc(t.name)}"></label>
       <label class="f">Schwierigkeit<select id="td">${Object.entries(R.difficulties).map(([key, v]) => `<option value="${key}"${key === t.diff ? ' selected' : ''}${!own && key !== 'leicht' && key !== 'sonstiges' ? ' disabled' : ''}>${v}</option>`).join('')}</select></label>
@@ -984,11 +954,11 @@
       }).join('')).join('')}
 
       <label class="f">Notiz${sheet.listName === 'Zauber' ? ' / Aufbau' : ''}<input id="tt" value="${esc(t.note)}"></label>
-      ${t.id ? '' : `<div class="cost">
-        <label class="f">Kostet das Lernen Punkte? (leer = nein)<input id="tc" type="text" inputmode="numeric" placeholder="0" value="${(R.buyCost[sheet.key] || {})[t.diff] || ''}"></label>
-        <label class="f">Bezahlt mit den Punkten von Feld<select id="tcs">${payable.length ? payable.map(([k, st]) => `<option value="${esc(k)}">${esc(ringName(k))} (${ringAvail(st)} verfügbar)</option>`).join('') : '<option value="">– noch keine Punkte gesammelt –</option>'}</select></label>
-        ${sheet.key === 'handwerk' ? '<p class="hint">Laut Regeln: leicht 5, mittel 20, schwer 50 Punkte.</p>' : ''}
-      </div>`}
+      <div class="grid2">
+        <label class="f">Gesammelte Punkte<input id="tp" type="text" inputmode="numeric" value="${num(t.punkte)}"></label>
+        <label class="f" id="tsw"${t.diff === 'sonstiges' ? '' : ' hidden'}>Stufe (Sonstiges, von Hand)<input id="ts" type="text" inputmode="numeric" value="${num(t.stufe)}"></label>
+      </div>
+      ${own ? '' : `<label class="f"><input type="checkbox" id="tteach"${t.teacher ? ' checked' : ''} style="width:auto;display:inline;margin-right:6px">Lehrmeister vorhanden (Ausbau über Stufe ${R.freeMaxForeign} hinaus)</label>`}
       <div class="row end">${t.id ? '<button class="btn danger" data-d-act="del">Löschen</button>' : ''}<button class="btn" data-d-act="close">Abbrechen</button><button class="btn fill" data-d-act="ok">Speichern</button></div>`,
     (act) => {
       if (act === 'del') {
@@ -998,29 +968,18 @@
       if (act === 'ok') {
         const name = $('#tn', dlg).value.trim();
         if (!name) return $('#tn', dlg).focus();
-        const upd = { id: t.id || uid(), stufe: num(t.stufe), name, diff: $('#td', dlg).value, diffText: $('#td', dlg).value === 'sonstiges' ? $('#tdx', dlg).value.trim() : '', 
+        const upd = { id: t.id || uid(), stufe: num(($('#ts', dlg) || {}).value), punkte: Math.max(0, num(($('#tp', dlg) || {}).value)), teacher: !!(($('#tteach', dlg) || {}).checked), name, diff: $('#td', dlg).value, diffText: $('#td', dlg).value === 'sonstiges' ? $('#tdx', dlg).value.trim() : '', 
           aspects: [...dlg.querySelectorAll('.aspect-pick input:checked')].map((x) => x.value).filter(Boolean), note: $('#tt', dlg).value.trim() };
-        const cost = t.id ? 0 : num(($('#tc', dlg).value || '').replace(/\D/g, ''), 0);
-        const payId = t.id ? '' : $('#tcs', dlg).value;
-        if (cost) {
-          const payer = c.aspects[payId];
-          if (!payer) {
-            if (!confirm(`Es gibt noch kein Feld mit Punkten, von dem die ${cost} Punkte bezahlt werden können.\n\nTrotzdem anlegen, ohne etwas abzuziehen (z. B. mit der DM so vereinbart)?`)) return;
-          } else if (ringAvail(payer) < cost && !confirm(`„${ringName(payId)}“ hat nur ${ringAvail(payer)} verfügbare Punkte, die Technik kostet ${cost}. Trotzdem speichern?`)) return;
-          if (payer && !confirm(`„${name}“ lernen und ${cost} verfügbare Punkte von „${ringName(payId)}“ ausgeben? (Gesammelte Punkte und Stufe des Feldes bleiben.)`)) return;
-        }
         change((c) => {
           const l = (c.techniques[sheet.key] ||= []); const i = l.findIndex((x) => x.id === upd.id); if (i >= 0) l[i] = upd; else l.push(upd);
-          if (cost && c.aspects[payId]) { const payer = aspectState(c, payId); payer.spent = Math.min(num(payer.punkte), num(payer.spent) + cost); }
         });
-        if (cost && c.aspects[payId]) toast(`${cost} Punkte ausgegeben (gesammelte Punkte bleiben).`);
       }
       dlg.close();
     });
     const sel = $('#td', dlg);
     sel.onchange = () => {
       $('#tdxw', dlg).hidden = sel.value !== 'sonstiges'; if (sel.value === 'sonstiges') $('#tdx', dlg).focus();
-      const tc = $('#tc', dlg); if (tc) tc.value = (R.buyCost[sheet.key] || {})[sel.value] || '';
+      $('#tsw', dlg).hidden = sel.value !== 'sonstiges';
     };
   }
 
@@ -1207,7 +1166,6 @@
       case 'newTech': return editTech('');
       case 'editTech': return editTech(b.dataset.id);
       case 'applyTech': return applyDialog(b.dataset.id);
-      case 'techUp': return techUpDialog(b.dataset.id);
       case 'addItem': {
         const list = b.dataset.list || 'items';
         if (list === 'items' && ch().items.length >= slotMax(ch())) return alert('Alle Inventarslots sind belegt. Baue einen Slot aus oder lege den Gegenstand in „Ohne Inventarslot“.');
