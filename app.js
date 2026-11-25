@@ -124,16 +124,16 @@
     const n = saveCount(c);
     return `
     <section class="card">
-      <h2>Charakter</h2>
-      <label class="f">Name<input data-bind="name" value="${esc(c.name)}"></label>
+      <h2>Charakter <button class="edit-btn" data-act="editChar" aria-label="Charakterangaben bearbeiten">✎</button></h2>
+      <div class="charname">${esc(c.name)}</div>
       <div class="grid2">
-        <label class="f">Klasse<div class="fixed">${esc(k.name)}</div></label>
-        <label class="f">Aktuelle Ausrichtung${lz ? `<div class="fixed">${esc(c.sub ? c.sub.split(' (')[0] : 'Neutral')}</div>` : `<select data-bind="sub"><option value="">Neutral</option>${subs.map((s) => `<option${s === c.sub ? ' selected' : ''}>${esc(s)}</option>`).join('')}</select>`}</label>
+        <div class="ro"><span>Klasse</span><b>${esc(k.name)}</b></div>
+        <div class="ro"><span>Aktuelle Ausrichtung</span><b>${esc(c.sub ? c.sub.split(' (')[0] : 'Neutral')}</b></div>
       </div>
       <div class="grid3">
-        <label class="f">Alter<input data-bind="alter" value="${esc(c.alter)}"></label>
-        <label class="f">Rasse<input data-bind="rasse" value="${esc(c.rasse)}"></label>
-        <label class="f">Größe<input data-bind="groesse" value="${esc(c.groesse)}"></label>
+        <div class="ro"><span>Alter</span><b>${esc(c.alter) || '–'}</b></div>
+        <div class="ro"><span>Rasse</span><b>${esc(c.rasse) || '–'}</b></div>
+        <div class="ro"><span>Größe</span><b>${esc(c.groesse) || '–'}</b></div>
       </div>
     </section>
 
@@ -858,6 +858,31 @@
     });
   }
 
+  // Charakterangaben nachträglich bearbeiten (bewusst nur über den kleinen ✎-Knopf).
+  function editChar() {
+    const c = ch(), subs = Object.keys(R.subclasses[c.klass] || {});
+    openDialog(`<h3>Charakterangaben</h3>
+      <label class="f">Name<input id="en" value="${esc(c.name)}"></label>
+      <div class="grid3">
+        <label class="f">Alter<input id="ea" value="${esc(c.alter)}"></label>
+        <label class="f">Rasse<input id="er" value="${esc(c.rasse)}"></label>
+        <label class="f">Größe<input id="eg" value="${esc(c.groesse)}"></label>
+      </div>
+      ${c.lauf ? '<p class="hint">Die Ausrichtung kommt aus dem Laufzettel der DM.</p>' : `<label class="f">Aktuelle Ausrichtung<select id="es"><option value="">Neutral</option>${subs.map((x) => `<option${x === c.sub ? ' selected' : ''}>${esc(x)}</option>`).join('')}</select></label>`}
+      <p class="hint">Die Klasse (${esc(klassOf(c).name)}) ist fest.</p>
+      <div class="row end"><button class="btn" data-d-act="close">Abbrechen</button><button class="btn fill" data-d-act="ok">Speichern</button></div>`,
+    (act) => {
+      if (act === 'ok') {
+        const name = $('#en', dlg).value.trim();
+        if (!name) return $('#en', dlg).focus();
+        const v = { name, alter: $('#ea', dlg).value.trim(), rasse: $('#er', dlg).value.trim(), groesse: $('#eg', dlg).value.trim() };
+        const sel = $('#es', dlg);
+        change((c) => { Object.assign(c, v); if (sel) c.sub = sel.value; });
+      }
+      dlg.close();
+    });
+  }
+
   // Neuer Charakter: Name und Klasse werden einmalig festgelegt.
   function newCharDialog() {
     openDialog(`<h3>Neuer Charakter</h3>
@@ -1019,6 +1044,7 @@
         return addPoints(-t.p, 'Zurückgenommen: ' + t.what, i);
       }
       case 'levelInfo': return levelInfo();
+      case 'editChar': return editChar();
       case 'guild': return change((c) => { c.guild = Math.max(0, Math.min(R.guildMax, num(c.guild) + d)); });
       case 'slotExtra': return change((c) => { c.slotExtra = Math.max(0, num(c.slotExtra) + d); });
       case 'tx': return booking(d, b);

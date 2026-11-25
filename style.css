@@ -234,3 +234,9 @@ details summary { cursor: pointer; color: var(--c); font-size: .9rem; margin-top
 .lvtable td { padding: 4px 2px; border-bottom: 1px solid var(--line); }
 .lvtable tr.done td { color: var(--muted); }
 .lvtable tr.now td { background: var(--cl); font-weight: 700; }
+
+.edit-btn { border: 1px solid var(--line); background: var(--paper); color: var(--muted); border-radius: 8px; width: 30px; height: 30px; padding: 0; font-size: .95rem; }
+.charname { font-size: 1.4rem; font-weight: 700; margin: -2px 0 10px; }
+.ro { margin-bottom: 8px; min-width: 0; }
+.ro span { display: block; font-size: .75rem; color: var(--muted); }
+.ro b { display: block; font-weight: 600; overflow-wrap: anywhere; }
