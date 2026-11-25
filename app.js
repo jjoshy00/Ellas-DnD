@@ -270,10 +270,10 @@
           <div class="row end" style="margin-top:8px">
             <button class="btn small" data-act="editTech" data-id="${t.id}">Bearbeiten</button>
             ${need && t.punkte >= need ? `<button class="btn small" data-act="techUp" data-id="${t.id}">Stufe aufsteigen</button>` : ''}
-            <button class="btn small fill" data-act="applyTech" data-id="${t.id}">Angewendet +1</button>
+            <button class="btn small fill" data-act="applyTech" data-id="${t.id}">Anwenden</button>
           </div></div>`;
       }).join('') : '<p class="hint">Noch keine Einträge.</p>'}
-      <p class="hint">„Angewendet +1“ gibt der ${sheet.listName === 'Zauber' ? 'Zauber' : 'Technik'} und jedem belegten Abschnitt im Kreis einen Punkt.</p>
+      <p class="hint">„Anwenden“: Würfelergebnis eintragen, die App rechnet Ergebnis und Punkte aus. Erst nach deiner Bestätigung bekommen ${sheet.listName === 'Zauber' ? 'der Zauber' : 'die Technik'} und jeder belegte Abschnitt im Kreis die Punkte.</p>
     </section>`;
   }
 
@@ -714,6 +714,68 @@
     });
   }
 
+  // Anwenden: Würfe eintragen, Ergebnis ausrechnen, Punkte erst nach Bestätigung vergeben.
+  function applyDialog(id) {
+    const t = (ch().techniques[S.sheet] || []).find((x) => x.id === id);
+    if (!t) return;
+    const die = R.diffDice[t.diff] || 4;
+    let w20 = '', dmg = '', pts = null;
+    const calc = () => {
+      const roll = num(w20, 0);
+      if (!roll) return null;
+      const total = roll + num(t.stufe);
+      const out = R.rollOutcomes.find((o) => total >= o.min && total <= o.max) || R.rollOutcomes[R.rollOutcomes.length - 1];
+      const points = (R.rollPoints.find((p) => total <= p.max) || R.rollPoints[R.rollPoints.length - 1]).points;
+      let dmgText = '';
+      const dv = num(dmg, 0);
+      if (dv) {
+        const v = dv * out.factor;
+        dmgText = out.factor === 0.5 && dv % 2 ? `${dv} halbiert = ${v.toLocaleString('de-DE')} → W10 entscheidet, ob auf ${Math.ceil(v)} oder ab ${Math.floor(v)} gerundet wird` : `${dv} × ${out.factor.toLocaleString('de-DE')} = ${v}`;
+      }
+      return { roll, total, out, points, dmgText };
+    };
+    const draw = () => {
+      const r = calc();
+      return `<h3>${esc(t.name)} anwenden</h3>
+        <p class="hint">${esc(R.difficulties[t.diff] || t.diff)} · Stufe ${t.stufe} = Würfelbonus +${t.stufe}</p>
+        <div class="grid2">
+          <label class="f">W20-Wurf<input id="w20" type="text" inputmode="numeric" value="${esc(w20)}" placeholder="1–20"></label>
+          <label class="f">W${die}-Wurf (Schaden/Qualität, optional)<input id="wd" type="text" inputmode="numeric" value="${esc(dmg)}" placeholder="1–${die}"></label>
+        </div>
+        <button class="btn" data-d-act="calc">Ausrechnen</button>
+        ${r ? `<div class="result">
+          <div>Wurf ${r.roll} + Bonus ${t.stufe} = <b>${r.total}</b></div>
+          <div>Ergebnis: <b>${esc(r.out.text)}</b></div>
+          ${r.dmgText ? `<div>W${die}: ${esc(r.dmgText)}</div>` : ''}
+          <div>Punkte laut Tabelle: <b>${r.points}</b> <small class="hint">(0–6 → 1, 7–13 → 2, 14–20 → 3)</small></div>
+        </div>
+        <p class="hint">Mit der DM klären und bei Bedarf ändern:</p>
+        <label class="f">Punkte, die vergeben werden<input id="pts" type="text" inputmode="numeric" value="${pts ?? r.points}"></label>
+        <p class="hint">Bekommen: ${esc(t.name)}${t.aspects.length ? ' und ' + t.aspects.map((k) => k.split('.').slice(2).join('.')).join(', ') : ''}.</p>` : ''}
+        <div class="row end"><button class="btn" data-d-act="close">Abbrechen</button>${r ? '<button class="btn fill" data-d-act="ok">Punkte vergeben</button>' : ''}</div>`;
+    };
+    openDialog(draw(), (act) => {
+      if (act === 'calc') {
+        w20 = $('#w20', dlg).value.replace(/\D/g, ''); dmg = $('#wd', dlg).value.replace(/\D/g, ''); pts = null;
+        if (!num(w20)) return alert('Bitte den W20-Wurf eintragen.');
+        dlg.innerHTML = draw(); return;
+      }
+      if (act === 'ok') {
+        const p = num(($('#pts', dlg).value || '').replace(/\D/g, ''), 0);
+        dlg.close();
+        if (!p) return toast('Keine Punkte vergeben.');
+        change((c) => {
+          const tt = (c.techniques[S.sheet] || []).find((x) => x.id === id);
+          if (!tt) return;
+          tt.punkte += p;
+          tt.aspects.forEach((k) => { aspectState(c, k).punkte += p; });
+        });
+        return toast(`${p} Punkt(e) vergeben.`);
+      }
+      dlg.close();
+    });
+  }
+
   function editTech(id) {
     const c = ch(), sheet = sheetDef(S.sheet);
     const list = (c.techniques[sheet.key] ||= []);
@@ -847,12 +909,7 @@
       case 'aspect': return editAspect(b.dataset.k);
       case 'newTech': return editTech('');
       case 'editTech': return editTech(b.dataset.id);
-      case 'applyTech': return change((c) => {
-        const t = (c.techniques[S.sheet] || []).find((x) => x.id === b.dataset.id);
-        if (!t) return;
-        t.punkte += 1;
-        t.aspects.forEach((k) => { aspectState(c, k).punkte += 1; });
-      });
+      case 'applyTech': return applyDialog(b.dataset.id);
       case 'techUp': return change((c) => {
         const t = (c.techniques[S.sheet] || []).find((x) => x.id === b.dataset.id);
         const need = t && techNeed(t);

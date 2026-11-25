@@ -284,6 +284,16 @@ window.RULES = {
       ] },
   ],
 
+  // Punktegebung beim Anwenden (Dokumente „Punktegebung Fertigkeiten_Techniken_…“):
+  // W20 + Stufe (Würfelbonus) → Ergebnis und Punkte; der Schadens-/Qualitätswürfel hängt von der Schwierigkeit ab.
+  rollOutcomes: [
+    { min: 1, max: 4, text: 'klappt nicht / trifft nicht', factor: 0 },
+    { min: 5, max: 10, text: 'klappt halb / halber Schaden', factor: 0.5 },
+    { min: 11, max: 19, text: 'klappt / trifft', factor: 1 },
+    { min: 20, max: 999, text: 'besser als gedacht / doppelter Schaden', factor: 2 },
+  ],
+  rollPoints: [{ max: 6, points: 1 }, { max: 13, points: 2 }, { max: 999, points: 3 }],
+  diffDice: { leicht: 4, mittel: 6, schwer: 8 },
   difficulties: { leicht: 'leicht (W4)', mittel: 'mittel (W6)', schwer: 'schwer (W8)' },
 
   // Benötigte Punkte für den Aufstieg von Stufe n auf n+1 (Index n), Punktegebung-Dokumente.
