@@ -141,7 +141,7 @@
       ${stat('Lebenspunkte', cur(c.lpCur, lm), lm, 'lp')}
       ${stat(k.resource, cur(c.resCur, rm), rm, 'res')}
       <div class="stat"><div class="lbl">Level</div><div class="val">${c.level}</div>
-        <div class="hint" style="margin:0">${pointsOf(c)} Punkte${R.levelPoints[c.level] !== undefined ? ` · nächstes ab ${R.levelPoints[c.level]}` : ''}</div></div>
+        ${levelBar(c)}</div>
       <div class="stat"><div class="lbl">Punkte zu verteilen</div><div class="val">${free}</div>
         <div class="hint" style="margin:4px 0 0">für ATK, DEF oder Attributfähigkeit</div></div>
       ${stat('ATK', c.atk + gearBonus(c, 'atk'), undefined, 'atk', gearBonus(c, 'atk') ? `${c.atk} geskillt ${gearBonus(c, 'atk') > 0 ? '+' : '−'} ${Math.abs(gearBonus(c, 'atk'))} Ausrüstung` : '')}
@@ -494,6 +494,11 @@
   // Werte aus dem Laufzettel in die Charaktere übernehmen (Level aus Punkten, Ausrichtung aus der Position).
   // ---------- Punkte, Level, Abenteurergilde ----------
   const pointsOf = (c) => (c.lauf ? c.lauf.points : num(c.points));
+  function levelBar(c) {
+    const p = pointsOf(c), lv = c.level, from = lv > 0 ? R.levelPoints[lv - 1] : 0, next = R.levelPoints[lv];
+    const pct = next === undefined ? 100 : Math.max(0, Math.min(100, (p / next) * 100));
+    return `<div class="lvbar" title="Punkte bis zum nächsten Level"><div class="bar"><i style="width:${pct}%"></i></div><small>${p}/${next === undefined ? p : next}</small></div>`;
+  }
   function pointsCard(c) {
     const p = pointsOf(c), lv = c.level, from = lv > 0 ? R.levelPoints[lv - 1] : 0, next = R.levelPoints[lv];
     const pct = next === undefined ? 100 : Math.max(0, Math.min(100, ((p - from) / (next - from)) * 100));

@@ -222,3 +222,7 @@ details summary { cursor: pointer; color: var(--c); font-size: .9rem; margin-top
 .pts-add { display: grid; grid-template-columns: 80px 1fr; gap: 6px; margin-top: 10px; }
 .pts-add #ptsAdj { text-align: center; }
 .pts-add .btn { grid-column: 1 / -1; }
+
+.lvbar { display: flex; align-items: center; gap: 6px; margin-top: 8px; }
+.lvbar .bar { flex: 1; margin: 0; }
+.lvbar small { color: var(--muted); font-size: .75rem; white-space: nowrap; }
