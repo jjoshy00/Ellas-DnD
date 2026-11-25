@@ -27,18 +27,30 @@
     c.notes = 'Ansichten der Dorfbewohner über Hicks:\nKleiner Quatschkopf/Chaot, will sich beweisen, macht aus vielem einen Wettbewerb, irgendwie sympathisch. Die Kinder im Dorf finden ihn gleichermaßen seltsam wie lustig (wie ein cooler Opa); verbreitet gute Laune.\n\nHeimatdorf: Hella (einen Tagesritt südlich von Hallrodon).';
     return c;
   }
+  function vince() {
+    const c = newChar('Vince La Grak', 'kuenstler');
+    c.level = 1;
+    c.laufName = 'Kim';
+    c.notes = 'Ansichten der Dorfbewohner über Vince La Grak:\nHöflich, ruhig; lässt sich aber gern, vor allem von Hicks, zu Quatsch verleiten, ist aber dennoch bedacht und bedenkt die Konsequenzen seines Handelns; hält Hicks’ Schabernack auch oft im Zaum; viele Damen im Dorf finden ihn attraktiv.\n\nHeimatdorf: Hella (einen Tagesritt südlich von Hallrodon).';
+    return c;
+  }
+  // Fertige Charaktere der Kampagne (zur Auswahl beim ersten Start und unter „Neuer Charakter“).
+  const PRESETS = [
+    { make: hicks, name: 'Hicks', klass: 'zauberer', who: 'Joshua' },
+    { make: vince, name: 'Vince La Grak', klass: 'kuenstler', who: 'Kim' },
+  ];
   function load() {
     try {
       const s = JSON.parse(localStorage.getItem(KEY));
       if (s && Array.isArray(s.chars) && s.chars.length) return s;
     } catch (e) { /* leer oder gesperrt */ }
     const c = hicks();
-    return { chars: [c], current: c.id, tab: 'bogen', sheet: 'zauber' };
+    return { chars: [c], current: c.id, tab: 'bogen', sheet: 'zauber', firstRun: true };
   }
   // Einträge in Listen bekommen eine feste Kennung, damit der Abgleich sie zuordnen kann.
   function withIds(st) {
     (st.chars || []).forEach((c) => {
-      if (c.laufName === undefined && String(c.name).trim().toLowerCase() === 'hicks') c.laufName = 'Joshua';
+      if (c.laufName === undefined) { const pr = PRESETS.find((x) => x.name.toLowerCase() === String(c.name).trim().toLowerCase()); if (pr) c.laufName = pr.who; }
       if (c.points === undefined) c.points = c.level > 0 ? R.levelPoints[Math.min(c.level, R.levelPoints.length) - 1] : 0;
       if (c.guild === undefined) c.guild = 0;
     });
@@ -100,6 +112,8 @@
   function applyTheme() {
     const k = klassOf(ch());
     document.documentElement.style.setProperty('--c', k.color);
+    const lum = (h) => { const [r, g, b] = [1, 3, 5].map((i) => parseInt(h.slice(i, i + 2), 16) / 255); return 0.299 * r + 0.587 * g + 0.114 * b; };
+    document.documentElement.style.setProperty('--on-c', lum(k.color) > 0.6 ? '#2b2230' : '#ffffff');
     document.documentElement.style.setProperty('--cl', darkMode.matches ? mixHex(k.color, '#221e26', 0.3) : k.light);
     $('meta[name=theme-color]').setAttribute('content', k.color);
     $('#title').textContent = ch().name || 'Charakterbogen';
@@ -107,6 +121,7 @@
     document.title = (ch().name || 'Charakterbogen') + ' – Charakterbogen';
   }
   function render() {
+    if (S.sheetFor !== S.current) { const own = R.sheets.find((x) => x.klass === ch().klass); if (own) S.sheet = own.key; S.sheetFor = S.current; }
     applyTheme();
     document.querySelectorAll('#tabs button').forEach((b) => b.classList.toggle('on', b.dataset.tab === S.tab));
     const y = window.scrollY;
@@ -894,16 +909,28 @@
   }
 
   // Neuer Charakter: Name und Klasse werden einmalig festgelegt.
+  // Beim ersten Start „Eigener Charakter“ gewählt: den vorbelegten Hicks wieder entfernen.
+  function dropDefault() {
+    if (!S.replaceDefault) return;
+    S.chars = S.chars.filter((x) => x.id !== S.replaceDefault);
+    delete S.replaceDefault;
+  }
   function newCharDialog() {
     openDialog(`<h3>Neuer Charakter</h3>
       <label class="f">Name<input id="nn" placeholder="Name"></label>
-      <p class="hint">Klasse wählen – sie lässt sich danach nicht mehr ändern.</p>
+      ${PRESETS.filter((pr) => !S.chars.some((c) => c.name === pr.name)).map((pr) => `<button class="choice" data-d-act="preset" data-n="${esc(pr.name)}" style="border-left:6px solid ${R.classes[pr.klass].color}">${esc(pr.name)} <small>Vorlage: ${esc(R.classes[pr.klass].name)}, Spieler ${esc(pr.who)}</small></button>`).join('')}
+      <p class="hint">Oder eigener Charakter: Name eintragen und Klasse wählen – sie lässt sich danach nicht mehr ändern.</p>
       ${Object.entries(R.classes).map(([key, v]) => `<button class="choice" data-d-act="klass" data-k="${key}" style="border-left:6px solid ${v.color}">${esc(v.name)}<small>Ressource: ${esc(v.resource)}</small></button>`).join('')}
       <div class="row end"><button class="btn" data-d-act="close">Abbrechen</button></div>`,
     (act, b) => {
       if (act === 'klass') {
         const c = newChar($('#nn', dlg).value.trim() || 'Neuer Charakter', b.dataset.k);
-        S.chars.push(c); S.current = c.id; S.tab = 'bogen'; save(); render();
+        S.chars.push(c); S.current = c.id; S.tab = 'bogen'; dropDefault(); save(); render();
+      }
+      if (act === 'preset') {
+        const c = withIds({ chars: [PRESETS.find((x) => x.name === b.dataset.n).make()] }).chars[0];
+        S.chars.push(c); S.current = c.id; S.tab = 'bogen'; dropDefault(); save(); render();
+        refreshLaufzettel();
       }
       dlg.close();
     });
@@ -1373,7 +1400,24 @@
   // Beim Laden (auch Neu-Laden im Browser) automatisch abgleichen.
   let skip = false;
   try { skip = sessionStorage.getItem('cb-synced') === '1'; sessionStorage.removeItem('cb-synced'); } catch (e) { /* egal */ }
+  // Erster Start auf einem Gerät: Charakter wählen.
+  function firstRunDialog() {
+    return new Promise((done) => {
+      openDialog(`<h3>Willkommen!</h3><p class="hint">Welchen Charakter spielst du auf diesem Gerät?</p>
+        ${PRESETS.map((pr) => `<button class="choice" data-d-act="pick" data-n="${esc(pr.name)}" style="border-left:6px solid ${R.classes[pr.klass].color}">${esc(pr.name)}<small>${esc(R.classes[pr.klass].name)} · Spieler ${esc(pr.who)}</small></button>`).join('')}
+        <button class="choice" data-d-act="own">Eigener Charakter<small>Name und Klasse selbst festlegen</small></button>`,
+      (act, b) => {
+        delete S.firstRun;
+        if (act === 'pick') { const c = withIds({ chars: [PRESETS.find((x) => x.name === b.dataset.n).make()] }).chars[0]; S.chars = [c]; S.current = c.id; }
+        save(); render(); dlg.close();
+        if (act === 'own') { S.replaceDefault = S.chars[0].id; newCharDialog(); }
+        done();
+      });
+    });
+  }
+
   setTimeout(async () => {
+    if (S.firstRun && !Y.token) await firstRunDialog();
     if (!skip && Y.token) await sync(true); else checkDuplicates();
     if (!dlg.open) await refreshLaufzettel();
   }, 300);
