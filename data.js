@@ -29,6 +29,8 @@ window.RULES = {
     ['Sorgt dafür, dass die DM den Kopf auf den Tisch klopfen will', 1, 2],
     ['Erfindet etwas (Zauber/Objekt)', 3, 3],
   ],
+  // Wechselkurse: 1000 Kupfer = 1 Silber, 1000 Silber = 1 Gold
+  exchange: { kPerS: 1000, sPerG: 1000 },
   guildMax: 10,   // Abenteurergilde: Stufe 0–10
   // Laufzettel der DM (Google-Tabelle): rote Zahl = Position auf dem Ausrichtungs-Chart, Summe = Punkte.
   laufzettel: { sheetId: '1Bucq40p-VDb47HDRdqjeQQpJTg0EFQ1WSLrpbkA1arA', grid: 15, region: 5 },

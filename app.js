@@ -341,6 +341,31 @@
         <small>${esc(t.when)}${t.note ? ' · ' + esc(t.note) : ''}</small></div>`).join('')}` : ''}
     </section>`;
   }
+  // Bezahlen mit automatischem Wechseln (größere Münzen werden nur so weit wie nötig gewechselt).
+  const moneyText = (m) => COINS.map(([k, n]) => `${num(m[k])} ${n}`).join(', ');
+  function payWithChange(money, amt, d) {
+    const { kPerS, sPerG } = R.exchange;
+    const m = { g: num(money.g) + d * amt.g, s: num(money.s) + d * amt.s, k: num(money.k) + d * amt.k };
+    const changes = [];
+    if (d > 0) return { money: m, changes, short: false };
+    if (m.g * sPerG * kPerS + m.s * kPerS + m.k < 0) return { short: true };
+    // 1) Fehlendes Kupfer aus Silber (bzw. Gold) wechseln, fehlendes Silber aus Gold.
+    if (m.k < 0) {
+      const needS = Math.ceil(-m.k / kPerS);
+      if (m.s < needS && m.g > 0) { const g = Math.min(m.g, Math.ceil((needS - m.s) / sPerG)); m.g -= g; m.s += g * sPerG; changes.push(`${g} Gold → ${g * sPerG} Silber`); }
+      const t = Math.min(needS, Math.max(0, m.s)); if (t) { m.s -= t; m.k += t * kPerS; changes.push(`${t} Silber → ${t * kPerS} Kupfer`); }
+    }
+    if (m.s < 0 && m.g > 0) { const g = Math.min(m.g, Math.ceil(-m.s / sPerG)); m.g -= g; m.s += g * sPerG; changes.push(`${g} Gold → ${g * sPerG} Silber`); }
+    // 2) Fehlt dann noch Silber oder Gold, aus kleineren Münzen zusammenlegen.
+    if (m.s < 0 && m.k >= kPerS) { const t = Math.min(Math.floor(m.k / kPerS), -m.s); m.k -= t * kPerS; m.s += t; changes.push(`${t * kPerS} Kupfer → ${t} Silber`); }
+    if (m.g < 0) {
+      if (m.s < (-m.g) * sPerG && m.k >= kPerS) { const t = Math.min(Math.floor(m.k / kPerS), (-m.g) * sPerG - m.s); m.k -= t * kPerS; m.s += t; changes.push(`${t * kPerS} Kupfer → ${t} Silber`); }
+      const g = Math.min(-m.g, Math.floor(m.s / sPerG)); if (g) { m.s -= g * sPerG; m.g += g; changes.push(`${g * sPerG} Silber → ${g} Gold`); }
+    }
+    if (m.s < 0 && m.k >= kPerS) { const t = Math.min(Math.floor(m.k / kPerS), -m.s); m.k -= t * kPerS; m.s += t; changes.push(`${t * kPerS} Kupfer → ${t} Silber`); }
+    if (m.g < 0 || m.s < 0 || m.k < 0) return { short: true };
+    return { money: m, changes, short: false };
+  }
   function booking(d, btn) {
     const box = btn.closest('.card');
     const field = (m) => box.querySelector(`[data-tx="${m}"]`);
@@ -348,12 +373,15 @@
     COINS.forEach(([m]) => { amt[m] = Math.max(0, num(field(m).value.replace(/\D/g, ''))); });
     if (!COINS.some(([m]) => amt[m])) return alert('Bitte einen Betrag eintragen.');
     const c = ch();
-    const after = COINS.map(([m, n]) => [n, num(c.money[m]) + d * amt[m]]);
-    const short = after.filter(([, v]) => v < 0);
-    if (short.length && !confirm(`Dafür reicht es nicht: ${short.map(([n, v]) => `${n} ${v}`).join(', ')}.\n\nTrotzdem buchen?`)) return;
+    const res = payWithChange(c.money, amt, d);
+    if (res.short) {
+      const after = COINS.map(([m, n]) => [n, num(c.money[m]) + d * amt[m]]).filter(([, v]) => v < 0);
+      if (!confirm(`Dafür reicht das Geld insgesamt nicht (${moneyText(c.money)} vorhanden).\n\nTrotzdem buchen? Danach: ${after.map(([n, v]) => `${n} ${v}`).join(', ')}.`)) return;
+    } else if (res.changes.length && !confirm(`Zum Bezahlen wird gewechselt: ${res.changes.join(', ')}.\n\nNach dem Bezahlen: ${moneyText(res.money)}. Einverstanden?`)) return;
     const note = field('note').value.trim();
     change((c) => {
-      COINS.forEach(([m]) => { c.money[m] = num(c.money[m]) + d * amt[m]; });
+      if (res.short) COINS.forEach(([m]) => { c.money[m] = num(c.money[m]) + d * amt[m]; });
+      else c.money = { ...res.money };
       const when = new Date().toLocaleString('de-DE', { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' });
       c.moneyLog = [{ d, ...amt, note, when, ts: Date.now() }, ...(c.moneyLog || [])].slice(0, 10);
     });
