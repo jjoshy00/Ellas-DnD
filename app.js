@@ -967,7 +967,10 @@
           ${mine.map((c) => `<button class="choice${c.id === S.current ? ' on' : ''}" data-d-act="sel" data-id="${c.id}" style="border-left:6px solid ${klassOf(c).color}">${esc(c.name)}<small>${esc(klassOf(c).name)} · Level ${c.level}</small></button>`).join('') || '<p class="hint">Noch kein Charakter.</p>'}
         </div>`;
       }).join('')}
-      <div class="row end"><button class="btn danger" data-d-act="del">Aktuellen Charakter löschen</button><button class="btn fill" data-d-act="newPlayer">+ Spieler</button></div>`,
+      <div class="row end"><button class="btn danger" data-d-act="del">Aktuellen Charakter löschen</button><button class="btn fill" data-d-act="newPlayer">+ Spieler</button></div>
+      ${(S.trash || []).length ? `<div class="group-h" style="margin-top:14px">Zuletzt gelöscht</div>${S.trash.map((t) => `<div class="tx row" style="flex-direction:row">
+        <span class="grow">${esc(t.char.name)} <small class="hint">(${esc(t.char.player || '')}, ${esc(klassOf(t.char).name)}, Level ${t.char.level})</small><br><small>gelöscht ${esc(t.when)}</small></span>
+        <button class="btn small" data-d-act="restore" data-id="${esc(t.id)}">Wiederherstellen</button></div>`).join('')}` : ''}`,
     (act, b) => {
       if (act === 'sel') { S.current = b.dataset.id; save(); render(); }
       if (act === 'new') return newCharDialog(b.dataset.p);
@@ -981,7 +984,19 @@
       if (act === 'del') {
         if (S.chars.length < 2) return alert('Der letzte Charakter kann nicht gelöscht werden.');
         if (!confirm(`„${ch().name}“ (${ch().player}) wirklich löschen?`)) return;
+        const gone = ch();
+        const when = new Date().toLocaleString('de-DE', { day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit' });
+        S.trash = [{ id: gone.id, char: JSON.parse(JSON.stringify(gone)), when, ts: Date.now() }, ...(S.trash || []).filter((t) => t.id !== gone.id)].slice(0, 5);
         S.chars = S.chars.filter((c) => c.id !== S.current); S.current = S.chars[0].id; save(); render();
+        toast(`„${gone.name}“ gelöscht – unter ☰ wiederherstellbar.`);
+      }
+      if (act === 'restore') {
+        const t = (S.trash || []).find((x) => x.id === b.dataset.id);
+        if (!t) return;
+        const c = JSON.parse(JSON.stringify(t.char));
+        if (S.chars.some((x) => x.id === c.id)) c.id = uid();
+        S.chars.push(c); S.current = c.id; S.trash = S.trash.filter((x) => x.id !== t.id); syncPlayers(); save(); render();
+        toast(`„${c.name}“ wiederhergestellt.`);
       }
       dlg.close();
     });
@@ -1150,7 +1165,7 @@
   const loadSync = () => { try { return JSON.parse(localStorage.getItem(SYNC_KEY)) || {}; } catch (e) { return {}; } };
   let Y = loadSync();
   const saveSync = () => { try { localStorage.setItem(SYNC_KEY, JSON.stringify(Y)); } catch (e) { /* kein Speicher */ } };
-  const shared = (st) => JSON.parse(JSON.stringify({ chars: st.chars.map(({ lauf, ...c }) => c), players: st.players || [] }));
+  const shared = (st) => JSON.parse(JSON.stringify({ chars: st.chars.map(({ lauf, ...c }) => c), players: st.players || [], trash: (st.trash || []).map((t) => ({ ...t, char: (({ lauf, ...c }) => c)(t.char) })) }));
 
   // JSON mit sortierten Schlüsseln vergleichen
   const canon = (v) => JSON.stringify(v, (k, x) => (x && typeof x === 'object' && !Array.isArray(x) ? Object.keys(x).sort().reduce((o, key) => { o[key] = x[key]; return o; }, {}) : x));
@@ -1171,6 +1186,11 @@
     }
     if ((last === 'points' || (path.includes('aspects') && (last === 'punkte' || last === 'spent'))) && typeof l === 'number' && typeof r === 'number') return num(b) + (l - num(b)) + (r - num(b));
     if (last === 'players' && Array.isArray(l) && Array.isArray(r)) return [...new Set([...l, ...r])];
+    if (last === 'trash' && Array.isArray(l) && Array.isArray(r)) {
+      const m = new Map(); [...l, ...r].forEach((t) => m.set(t.id, t));
+      const removed = new Set((Array.isArray(b) ? b : []).map((t) => t.id).filter((id) => !l.some((t) => t.id === id) || !r.some((t) => t.id === id)));
+      return [...m.values()].filter((t) => !removed.has(t.id)).sort((x, y) => num(y.ts) - num(x.ts)).slice(0, 5);
+    }
     if ((last === 'moneyLog' || last === 'pointsLog') && Array.isArray(l) && Array.isArray(r)) {
       const seen = new Set(), all = [];
       [...l, ...r].forEach((t) => { const k = canon(t); if (!seen.has(k)) { seen.add(k); all.push(t); } });
@@ -1253,6 +1273,8 @@
   }
   function finish(data, msg) {
     S.chars = withIds(JSON.parse(JSON.stringify(data))).chars;
+    if (Array.isArray(data.players)) S.players = [...new Set([...data.players, ...S.chars.map((c) => c.player).filter(Boolean)])];
+    if (Array.isArray(data.trash)) S.trash = data.trash.filter((t) => !S.chars.some((c) => c.id === t.id)).sort((a, b) => num(b.ts) - num(a.ts)).slice(0, 5);
     if (!S.chars.some((c) => c.id === S.current)) S.current = S.chars[0].id;
     Y.base = shared(S); Y.last = new Date().toLocaleString('de-DE', { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' });
     save(); saveSync(); applyLaufzettel(false); toast(msg);
