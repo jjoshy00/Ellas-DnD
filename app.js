@@ -784,13 +784,18 @@
     openDialog(`<h3>${t.id ? 'Bearbeiten' : sheet.listName === 'Zauber' ? 'Neuer Zauber' : 'Neue Technik'}</h3>
       <label class="f">Name<input id="tn" value="${esc(t.name)}"></label>
       <label class="f">Schwierigkeit<select id="td">${Object.entries(R.difficulties).map(([key, v]) => `<option value="${key}"${key === t.diff ? ' selected' : ''}${!own && key !== 'leicht' ? ' disabled' : ''}>${v}</option>`).join('')}</select></label>
-      <p class="hint">Welche Abschnitte belegt sie? Beim Anwenden bekommt jeder einen Punkt.</p>
+      <p class="hint">Welche Abschnitte belegt sie? Beim Anwenden bekommt jeder die vergebenen Punkte.</p>
       ${sheet.charts.map((ct) => `${ct.label ? `<div class="group-h">${esc(ct.label)}</div>` : ''}<div class="aspect-pick">${ct.aspects.map((a) => {
         const key = aspectKey(sheet.key, ct.key, a);
         return `<label><input type="checkbox" value="${esc(key)}"${t.aspects.includes(key) ? ' checked' : ''}>${esc(a)}</label>`;
       }).join('')}</div>`).join('')}
-      <div class="grid2"><label class="f">Stufe<input type="number" id="ts" value="${t.stufe}"></label><label class="f">Punkte<input type="number" id="tp" value="${t.punkte}"></label></div>
+      <div class="grid2"><label class="f">Stufe<input type="text" inputmode="numeric" id="ts" value="${t.stufe}"></label><label class="f">Punkte<input type="text" inputmode="numeric" id="tp" value="${t.punkte}"></label></div>
       <label class="f">Notiz${sheet.listName === 'Zauber' ? ' / Aufbau' : ''}<input id="tt" value="${esc(t.note)}"></label>
+      ${t.id ? '' : `<div class="cost">
+        <label class="f">Kostet das Lernen Punkte? (leer = nein)<input id="tc" type="text" inputmode="numeric" placeholder="0"></label>
+        <label class="f">Bezahlt mit den Punkten von<select id="tcs">${list.length ? list.map((x) => `<option value="${x.id}">${esc(x.name)} (${x.punkte} Punkte)</option>`).join('') : '<option value="">– noch keine andere Technik –</option>'}</select></label>
+        ${sheet.key === 'handwerk' ? '<p class="hint">Laut Regeln: leicht 5, mittel 20, schwer 50 Punkte.</p>' : ''}
+      </div>`}
       <div class="row end">${t.id ? '<button class="btn danger" data-d-act="del">Löschen</button>' : ''}<button class="btn" data-d-act="close">Abbrechen</button><button class="btn fill" data-d-act="ok">Speichern</button></div>`,
     (act) => {
       if (act === 'del') {
@@ -802,7 +807,19 @@
         if (!name) return $('#tn', dlg).focus();
         const upd = { id: t.id || uid(), name, diff: $('#td', dlg).value, stufe: Math.max(0, num($('#ts', dlg).value)), punkte: Math.max(0, num($('#tp', dlg).value)),
           aspects: [...dlg.querySelectorAll('.aspect-pick input:checked')].map((x) => x.value), note: $('#tt', dlg).value.trim() };
-        change((c) => { const l = (c.techniques[sheet.key] ||= []); const i = l.findIndex((x) => x.id === upd.id); if (i >= 0) l[i] = upd; else l.push(upd); });
+        const cost = t.id ? 0 : num(($('#tc', dlg).value || '').replace(/\D/g, ''), 0);
+        const payId = t.id ? '' : $('#tcs', dlg).value;
+        if (cost) {
+          const payer = list.find((x) => x.id === payId);
+          if (!payer) return alert('Es gibt noch keine Technik mit Punkten, von der die Kosten abgezogen werden können.');
+          if (payer.punkte < cost && !confirm(`„${payer.name}“ hat nur ${payer.punkte} Punkte, die Technik kostet ${cost}. Trotzdem speichern (Punkte gehen auf 0)?`)) return;
+          if (!confirm(`„${name}“ lernen und ${cost} Punkte von „${payer.name}“ abziehen?`)) return;
+        }
+        change((c) => {
+          const l = (c.techniques[sheet.key] ||= []); const i = l.findIndex((x) => x.id === upd.id); if (i >= 0) l[i] = upd; else l.push(upd);
+          if (cost) { const payer = l.find((x) => x.id === payId); if (payer) payer.punkte = Math.max(0, payer.punkte - cost); }
+        });
+        if (cost) toast(`${cost} Punkte abgezogen.`);
       }
       dlg.close();
     });

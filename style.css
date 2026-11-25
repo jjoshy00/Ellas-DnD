@@ -216,3 +216,5 @@ details summary { cursor: pointer; color: var(--c); font-size: .9rem; margin-top
 .lvl-box { width: 36px; height: 36px; line-height: 32px; text-align: center; font-weight: 700; font-size: 1.1rem; color: var(--c); border: 2px solid var(--ink); border-radius: 4px; }
 
 .result { margin: 10px 0; padding: 10px; border-radius: 10px; background: var(--cl); line-height: 1.6; }
+
+.cost { border-top: 1px solid var(--line); margin-top: 8px; padding-top: 8px; }
