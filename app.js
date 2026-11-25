@@ -73,11 +73,15 @@
 
   const sheetDef = (k) => R.sheets.find((s) => s.key === k) || R.sheets[0];
   const aspectKey = (sheet, chart, aspect) => `${sheet}.${chart}.${aspect}`;
-  const aspectState = (c, k) => (c.aspects[k] ||= { stufe: 0, punkte: 0 });
+  const aspectState = (c, k) => (c.aspects[k] ||= { punkte: 0, spent: 0 });
+  // Die Punkte werden in den Feldern (Ringen) gesammelt. Die Stufe ergibt sich automatisch aus den gesammelten Punkten.
+  const ringStufe = (k, st) => (R.baseThresholds[sheetDef(k.split('.')[0]).thresholds] || R.baseThresholds.normal).filter((x) => num(st && st.punkte) >= x).length;
+  const ringAvail = (st) => Math.max(0, num(st && st.punkte) - num(st && st.spent));
+  const ringName = (k) => k.split('.').slice(2).join('.');
+  // Stufe einer Technik = niedrigste Stufe ihrer Felder (Würfelbonus beim Anwenden).
+  const techStufe = (c, t) => (t.aspects.length ? Math.min(...t.aspects.map((k) => ringStufe(k, c.aspects[k]))) : 0);
   const baseNeed = (sheet, stufe) => (R.baseThresholds[sheetDef(sheet).thresholds] || R.baseThresholds.normal)[stufe];
-  // Punkte einer Technik: „gesammelt“ (t.punkte) wächst nur und bestimmt die Stufe; „verfügbar“ = gesammelt − ausgegeben (Lernkosten).
-  const techNeed = (t) => (R.thresholds[t.diff] || (t.diff === 'sonstiges' ? [] : R.thresholds.leicht))[t.stufe];
-  const avail = (t) => Math.max(0, num(t.punkte) - num(t.spent));
+
   function teachNote(stufe) {
     if (stufe >= R.masterFrom) return 'Nächste Stufe nur bei einem Meister (Lehre).';
     if (stufe >= R.teacherFrom) return 'Für die nächste Stufe braucht es jemanden, der sie beibringt.';
@@ -227,15 +231,15 @@
     let out = `<svg viewBox="-75 0 ${size + 150} ${size}" role="img" aria-label="${esc(chart.label || sheet.title)}">`;
     chart.aspects.forEach((asp, i) => {
       const a0 = start + (i * 2 * Math.PI) / N, a1 = start + ((i + 1) * 2 * Math.PI) / N;
-      const st = aspectState(c, aspectKey(sheet.key, chart.key, asp));
-      const r = (Math.min(st.stufe, rings) / rings) * rMax;
+      const ak = aspectKey(sheet.key, chart.key, asp), st = c.aspects[ak] || {}, sf = ringStufe(ak, st);
+      const r = (Math.min(sf, rings) / rings) * rMax;
       const am = (a0 + a1) / 2;
       out += `<path class="seg" d="${wedge(rMax, a0, a1)}" fill="transparent" data-act="aspect" data-k="${esc(aspectKey(sheet.key, chart.key, asp))}"/>`;
-      if (r) out += `<path d="${wedge(r, a0, a1)}" fill="var(--c)" opacity="${st.stufe > rings ? 0.95 : 0.55}" pointer-events="none"/>`;
+      if (r) out += `<path d="${wedge(r, a0, a1)}" fill="var(--c)" opacity="${sf > rings ? 0.95 : 0.55}" pointer-events="none"/>`;
       const [lx, ly] = pt(rMax + 22, am);
       const anchor = Math.abs(Math.cos(am)) < 0.3 ? 'middle' : Math.cos(am) > 0 ? 'start' : 'end';
       out += `<text x="${lx}" y="${ly}" text-anchor="${anchor}" dominant-baseline="middle" pointer-events="none">${esc(asp)}</text>`;
-      out += `<text class="num" x="${lx}" y="${ly + 16}" text-anchor="${anchor}" dominant-baseline="middle" pointer-events="none">${st.stufe}${st.punkte ? ` · ${st.punkte} P` : ''}</text>`;
+      out += `<text class="num" x="${lx}" y="${ly + 16}" text-anchor="${anchor}" dominant-baseline="middle" pointer-events="none">${sf}${st.punkte ? ` · ${st.punkte} P` : ''}</text>`;
     });
     for (let k = 1; k <= rings; k++) out += `<circle cx="${cx}" cy="${cy}" r="${(k / rings) * rMax}" fill="none" stroke="var(--line)" pointer-events="none"/>`;
     for (let i = 0; i < N && N > 1; i++) {
@@ -254,28 +258,22 @@
     <section class="card">
       <h2>${esc(sheet.title)} <small>Ringe = Stufe</small></h2>
       <div class="charts">${sheet.charts.map((ct) => `<div class="chart">${chartSvg(c, sheet, ct)}${ct.label ? `<h3>${esc(ct.label)}</h3>` : ''}</div>`).join('')}</div>
-      <p class="hint">Abschnitt antippen, um Punkte oder Stufe vom DM von Hand einzutragen.</p>
+      <p class="hint">Die Punkte werden in den Feldern gesammelt, die Ringe (Stufe) steigen automatisch. Feld antippen, um Punkte von der DM von Hand einzutragen.</p>
     </section>
     <section class="card">
       <h2>${sheet.listName === 'Zauber' ? 'Zauber' : 'Techniken'} <button class="btn small fill" data-act="newTech">+ Neu</button></h2>
       ${own ? '' : `<p class="hint">Nicht deine Klasse: hier sind nur leichte ${sheet.listName === 'Zauber' ? 'Zauber' : 'Techniken'} erlernbar.</p>`}
       ${list.length ? list.map((t) => {
-        const need = techNeed(t);
-        const pct = need ? Math.min(100, (t.punkte / need) * 100) : 100;
-        const aspects = t.aspects.map((k) => k.split('.').slice(2).join('.'));
         return `<div class="tech">
           <div class="head"><b>${esc(t.name)}</b><span class="tag">${esc(diffLabel(t))}</span></div>
-          <div>${aspects.map((a) => `<span class="tag">${esc(a)}</span>`).join('') || '<span class="hint">belegt keine Abschnitte</span>'}</div>
-          <div class="hint">Stufe ${t.stufe} · <b>${t.punkte}</b> gesammelt${need ? ` (Stufe ${t.stufe + 1} ab ${need})` : ''} · <b>${avail(t)}</b> verfügbar${t.note ? ' · ' + esc(t.note) : ''}</div>
-          <div class="bar"><i style="width:${pct}%"></i></div>
-          ${need && t.punkte >= need ? `<p class="hint">${esc(teachNote(t.stufe) || 'Aufstieg möglich.')}</p>` : ''}
+          <div>${t.aspects.map((k) => `<span class="tag">${esc(ringName(k))} · Stufe ${ringStufe(k, c.aspects[k])}</span>`).join('') || '<span class="hint">belegt keine Felder</span>'}</div>
+          <div class="hint">Würfelbonus +${techStufe(c, t)} (niedrigste Stufe der Felder)${t.note ? ' · ' + esc(t.note) : ''}</div>
           <div class="row end" style="margin-top:8px">
             <button class="btn small" data-act="editTech" data-id="${t.id}">Bearbeiten</button>
-            ${need && t.punkte >= need ? `<button class="btn small" data-act="techUp" data-id="${t.id}">Stufe aufsteigen</button>` : ''}
             <button class="btn small fill" data-act="applyTech" data-id="${t.id}">Anwenden</button>
           </div></div>`;
       }).join('') : '<p class="hint">Noch keine Einträge.</p>'}
-      <p class="hint">„Anwenden“: Würfelergebnis eintragen, die App rechnet Ergebnis und Punkte aus. Erst nach deiner Bestätigung bekommen ${sheet.listName === 'Zauber' ? 'der Zauber' : 'die Technik'} und jeder belegte Abschnitt im Kreis die Punkte.</p>
+      <p class="hint">„Anwenden“: Würfelergebnis eintragen, die App rechnet Ergebnis und Punkte aus. Erst nach deiner Bestätigung bekommt jedes Feld ${sheet.listName === 'Zauber' ? 'des Zaubers' : 'der Technik'} im Kreis die Punkte.</p>
     </section>`;
   }
 
@@ -727,24 +725,21 @@
     const [sheetKey, , ...rest] = k.split('.');
     const name = rest.join('.');
     const draw = () => {
-      const st = aspectState(ch(), k);
-      const need = baseNeed(sheetKey, st.stufe);
+      const st = aspectState(ch(), k), sf = ringStufe(k, st);
+      const need = baseNeed(sheetKey, sf);
       return `<h3>${esc(name)}</h3><p class="hint">${esc(sheetDef(sheetKey).title)}</p>
       <div class="stats">
-        <div class="stat"><div class="lbl">Stufe (Ringe)</div><div class="val">${st.stufe}</div>
-          <div class="stepper"><button class="btn" data-d-act="stufe" data-v="-1">−</button><button class="btn" data-d-act="stufe" data-v="1">+</button></div></div>
+        <div class="stat"><div class="lbl">Stufe (Ringe)</div><div class="val">${sf}</div><div class="hint" style="margin:0">automatisch</div></div>
         <div class="stat"><div class="lbl">Gesammelte Punkte</div><div class="val">${st.punkte}${need ? `<small> / ${need}</small>` : ''}</div>
           <div class="stepper"><button class="btn" data-d-act="punkte" data-v="-1">−</button><button class="btn" data-d-act="punkte" data-v="1">+</button><button class="btn" data-d-act="punkte" data-v="5">+5</button></div></div>
       </div>
-      ${need && st.punkte >= need ? `<p class="hint">${esc(teachNote(st.stufe) || 'Aufstieg möglich.')}</p><button class="btn fill" data-d-act="up">Stufe aufsteigen</button>` : ''}
+      <p class="hint">Verfügbar für Lernkosten: <b>${ringAvail(st)}</b>${num(st.spent) ? ` (${st.spent} ausgegeben)` : ''}.${teachNote(sf) ? ' ' + esc(teachNote(sf)) : ''}</p>
       <div class="row end" style="margin-top:12px"><button class="btn" data-d-act="close">Fertig</button></div>`;
     };
     openDialog(draw(), (act, b) => {
       if (act === 'close') return dlg.close();
       const c = ch(), st = aspectState(c, k), v = num(b.dataset.v);
-      if (act === 'stufe') st.stufe = Math.max(0, Math.min(15, st.stufe + v));
-      if (act === 'punkte') st.punkte = Math.max(0, st.punkte + v);
-      if (act === 'up') { const need = baseNeed(sheetKey, st.stufe); if (need && st.punkte >= need) st.stufe += 1; }
+      if (act === 'punkte') { const before = ringStufe(k, st); st.punkte = Math.max(0, st.punkte + v); if (ringStufe(k, st) > before) toast(`${name}: Stufe ${ringStufe(k, st)}!`); }
       save(); render(); dlg.innerHTML = draw();
     });
   }
@@ -758,7 +753,7 @@
     const calc = () => {
       const roll = num(w20, 0);
       if (!roll) return null;
-      const total = roll + num(t.stufe);
+      const total = roll + techStufe(ch(), t);
       const out = R.rollOutcomes.find((o) => total >= o.min && total <= o.max) || R.rollOutcomes[R.rollOutcomes.length - 1];
       const points = (R.rollPoints.find((p) => total <= p.max) || R.rollPoints[R.rollPoints.length - 1]).points;
       let dmgText = '';
@@ -772,21 +767,21 @@
     const draw = () => {
       const r = calc();
       return `<h3>${esc(t.name)} anwenden</h3>
-        <p class="hint">${esc(diffLabel(t))} · Stufe ${t.stufe} = Würfelbonus +${t.stufe}</p>
+        <p class="hint">${esc(diffLabel(t))} · Würfelbonus +${techStufe(ch(), t)} (niedrigste Stufe der Felder)</p>
         <div class="grid2">
           <label class="f">W20-Wurf<input id="w20" type="text" inputmode="numeric" value="${esc(w20)}" placeholder="1–20"></label>
           <label class="f">Schadens-/Qualitätswurf (optional)<input id="wd" type="text" inputmode="numeric" value="${esc(dmg)}" placeholder="Wurf"></label>
         </div>
         <button class="btn" data-d-act="calc">Ausrechnen</button>
         ${r ? `<div class="result">
-          <div>Wurf ${r.roll} + Bonus ${t.stufe} = <b>${r.total}</b></div>
+          <div>Wurf ${r.roll} + Bonus ${techStufe(ch(), t)} = <b>${r.total}</b></div>
           <div>Ergebnis: <b>${esc(r.out.text)}</b></div>
           ${r.dmgText ? `<div>Schaden/Qualität: ${esc(r.dmgText)}</div>` : ''}
           <div>Punkte laut Tabelle: <b>${r.points}</b> <small class="hint">(0–6 → 1, 7–13 → 2, 14–20 → 3)</small></div>
         </div>
         <p class="hint">Mit der DM klären und bei Bedarf ändern:</p>
         <label class="f">Punkte, die vergeben werden<input id="pts" type="text" inputmode="numeric" value="${pts ?? r.points}"></label>
-        <p class="hint">Bekommen: ${esc(t.name)}${t.aspects.length ? ' und ' + t.aspects.map((k) => k.split('.').slice(2).join('.')).join(', ') : ''}.</p>` : ''}
+        <p class="hint">Bekommen: ${t.aspects.length ? t.aspects.map(ringName).join(', ') : 'keine Felder belegt'}.</p>` : ''}
         <div class="row end"><button class="btn" data-d-act="close">Abbrechen</button>${r ? '<button class="btn fill" data-d-act="ok">Punkte vergeben</button>' : ''}</div>`;
     };
     openDialog(draw(), (act) => {
@@ -799,13 +794,17 @@
         const p = num(($('#pts', dlg).value || '').replace(/\D/g, ''), 0);
         dlg.close();
         if (!p) return toast('Keine Punkte vergeben.');
+        const ups = [];
         change((c) => {
           const tt = (c.techniques[S.sheet] || []).find((x) => x.id === id);
           if (!tt) return;
-          tt.punkte += p;
-          tt.aspects.forEach((k) => { aspectState(c, k).punkte += p; });
+          tt.aspects.forEach((k) => {
+            const st = aspectState(c, k), before = ringStufe(k, st);
+            st.punkte += p;
+            if (ringStufe(k, st) > before) ups.push(`${ringName(k)} Stufe ${ringStufe(k, st)}`);
+          });
         });
-        return toast(`${p} Punkt(e) vergeben.`);
+        return toast(`${p} Punkt(e) je Feld vergeben.${ups.length ? ' Aufstieg: ' + ups.join(', ') + '!' : ''}`);
       }
       dlg.close();
     });
@@ -818,6 +817,7 @@
     const list = (c.techniques[sheet.key] ||= []);
     const t = list.find((x) => x.id === id) || { id: '', name: '', diff: 'leicht', stufe: 0, punkte: 0, aspects: [], note: '' };
     const own = sheet.klass === c.klass;
+    const payable = Object.entries(c.aspects).filter(([k, st]) => k.startsWith(sheet.key + '.') && ringAvail(st) > 0).sort((a, b) => ringAvail(b[1]) - ringAvail(a[1]));
     openDialog(`<h3>${t.id ? 'Bearbeiten' : sheet.listName === 'Zauber' ? 'Neuer Zauber' : 'Neue Technik'}</h3>
       <label class="f">Name<input id="tn" value="${esc(t.name)}"></label>
       <label class="f">Schwierigkeit<select id="td">${Object.entries(R.difficulties).map(([key, v]) => `<option value="${key}"${key === t.diff ? ' selected' : ''}${!own && key !== 'leicht' && key !== 'sonstiges' ? ' disabled' : ''}>${v}</option>`).join('')}</select></label>
@@ -830,12 +830,11 @@
           <label><input type="radio" name="${name}" value=""${has ? '' : ' checked'}>keins</label>
           ${g.aspects.map((a, i) => `<label><input type="radio" name="${name}" value="${esc(keys[i])}"${keys[i] === has ? ' checked' : ''}>${esc(a)}</label>`).join('')}</div>`;
       }).join('')).join('')}
-      <div class="grid2"><label class="f">Stufe<input type="text" inputmode="numeric" id="ts" value="${t.stufe}"></label><label class="f">Gesammelte Punkte<input type="text" inputmode="numeric" id="tp" value="${t.punkte}"></label></div>
-      ${t.id ? `<label class="f">Davon ausgegeben (für Lernkosten)<input type="text" inputmode="numeric" id="tsp" value="${num(t.spent)}"></label>` : ''}
+
       <label class="f">Notiz${sheet.listName === 'Zauber' ? ' / Aufbau' : ''}<input id="tt" value="${esc(t.note)}"></label>
       ${t.id ? '' : `<div class="cost">
         <label class="f">Kostet das Lernen Punkte? (leer = nein)<input id="tc" type="text" inputmode="numeric" placeholder="0"></label>
-        <label class="f">Bezahlt mit den Punkten von<select id="tcs">${list.length ? list.map((x) => `<option value="${x.id}">${esc(x.name)} (${avail(x)} verfügbar)</option>`).join('') : '<option value="">– noch keine andere Technik –</option>'}</select></label>
+        <label class="f">Bezahlt mit den Punkten von Feld<select id="tcs">${payable.length ? payable.map(([k, st]) => `<option value="${esc(k)}">${esc(ringName(k))} (${ringAvail(st)} verfügbar)</option>`).join('') : '<option value="">– noch keine Punkte gesammelt –</option>'}</select></label>
         ${sheet.key === 'handwerk' ? '<p class="hint">Laut Regeln: leicht 5, mittel 20, schwer 50 Punkte.</p>' : ''}
       </div>`}
       <div class="row end">${t.id ? '<button class="btn danger" data-d-act="del">Löschen</button>' : ''}<button class="btn" data-d-act="close">Abbrechen</button><button class="btn fill" data-d-act="ok">Speichern</button></div>`,
@@ -847,19 +846,19 @@
       if (act === 'ok') {
         const name = $('#tn', dlg).value.trim();
         if (!name) return $('#tn', dlg).focus();
-        const upd = { id: t.id || uid(), name, diff: $('#td', dlg).value, diffText: $('#td', dlg).value === 'sonstiges' ? $('#tdx', dlg).value.trim() : '', stufe: Math.max(0, num($('#ts', dlg).value)), punkte: Math.max(0, num($('#tp', dlg).value)), spent: t.id ? Math.max(0, num(($('#tsp', dlg) || {}).value)) : 0,
+        const upd = { id: t.id || uid(), name, diff: $('#td', dlg).value, diffText: $('#td', dlg).value === 'sonstiges' ? $('#tdx', dlg).value.trim() : '', 
           aspects: [...dlg.querySelectorAll('.aspect-pick input:checked')].map((x) => x.value).filter(Boolean), note: $('#tt', dlg).value.trim() };
         const cost = t.id ? 0 : num(($('#tc', dlg).value || '').replace(/\D/g, ''), 0);
         const payId = t.id ? '' : $('#tcs', dlg).value;
         if (cost) {
-          const payer = list.find((x) => x.id === payId);
-          if (!payer) return alert('Es gibt noch keine Technik mit Punkten, von der die Kosten abgezogen werden können.');
-          if (avail(payer) < cost && !confirm(`„${payer.name}“ hat nur ${avail(payer)} verfügbare Punkte, die Technik kostet ${cost}. Trotzdem speichern?`)) return;
-          if (!confirm(`„${name}“ lernen und ${cost} der verfügbaren Punkte von „${payer.name}“ ausgeben? (Die gesammelten Punkte und die Stufe bleiben.)`)) return;
+          const payer = c.aspects[payId];
+          if (!payer) return alert('Es gibt noch kein Feld mit Punkten, von dem die Kosten bezahlt werden können.');
+          if (ringAvail(payer) < cost && !confirm(`„${ringName(payId)}“ hat nur ${ringAvail(payer)} verfügbare Punkte, die Technik kostet ${cost}. Trotzdem speichern?`)) return;
+          if (!confirm(`„${name}“ lernen und ${cost} verfügbare Punkte von „${ringName(payId)}“ ausgeben? (Gesammelte Punkte und Stufe des Feldes bleiben.)`)) return;
         }
         change((c) => {
           const l = (c.techniques[sheet.key] ||= []); const i = l.findIndex((x) => x.id === upd.id); if (i >= 0) l[i] = upd; else l.push(upd);
-          if (cost) { const payer = l.find((x) => x.id === payId); if (payer) payer.spent = Math.min(num(payer.punkte), num(payer.spent) + cost); }
+          if (cost) { const payer = aspectState(c, payId); payer.spent = Math.min(num(payer.punkte), num(payer.spent) + cost); }
         });
         if (cost) toast(`${cost} Punkte ausgegeben (gesammelte Punkte bleiben).`);
       }
@@ -1000,17 +999,6 @@
       case 'newTech': return editTech('');
       case 'editTech': return editTech(b.dataset.id);
       case 'applyTech': return applyDialog(b.dataset.id);
-      case 'techUp': {
-        const t0 = (ch().techniques[S.sheet] || []).find((x) => x.id === b.dataset.id);
-        if (!t0) return;
-        const note = teachNote(t0.stufe);
-        if (!confirm(`„${t0.name}“ auf Stufe ${t0.stufe + 1} heben?${note ? '\n\n' + note : ''}\n\nDie gesammelten Punkte bleiben erhalten.`)) return;
-        return change((c) => {
-          const t = (c.techniques[S.sheet] || []).find((x) => x.id === b.dataset.id);
-          const need = t && techNeed(t);
-          if (need && t.punkte >= need) t.stufe += 1;
-        });
-      }
       case 'addItem': {
         const list = b.dataset.list || 'items';
         if (list === 'items' && ch().items.length >= slotMax(ch())) return alert('Alle Inventarslots sind belegt. Baue einen Slot aus oder lege den Gegenstand in „Ohne Inventarslot“.');
@@ -1119,7 +1107,7 @@
       ['g', 's', 'k'].forEach((k) => { const bb = num(b && b[k]); out[k] = bb + (num(l[k]) - bb) + (num(r[k]) - bb); });
       return out;
     }
-    if (last === 'points' && typeof l === 'number' && typeof r === 'number') return num(b) + (l - num(b)) + (r - num(b));
+    if ((last === 'points' || (path.includes('aspects') && (last === 'punkte' || last === 'spent'))) && typeof l === 'number' && typeof r === 'number') return num(b) + (l - num(b)) + (r - num(b));
     if ((last === 'moneyLog' || last === 'pointsLog') && Array.isArray(l) && Array.isArray(r)) {
       const seen = new Set(), all = [];
       [...l, ...r].forEach((t) => { const k = canon(t); if (!seen.has(k)) { seen.add(k); all.push(t); } });
