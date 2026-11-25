@@ -223,6 +223,14 @@ details summary { cursor: pointer; color: var(--c); font-size: .9rem; margin-top
 .pts-add #ptsAdj { text-align: center; }
 .pts-add .btn { grid-column: 1 / -1; }
 
-.lvbar { display: flex; align-items: center; gap: 6px; margin-top: 8px; }
-.lvbar .bar { flex: 1; margin: 0; }
-.lvbar small { color: var(--muted); font-size: .75rem; white-space: nowrap; }
+.lvbar { width: 60%; margin: 8px auto 0; }
+.lvbar .bar { margin: 0; }
+
+.stat-info { position: relative; }
+.info-i { position: absolute; top: 6px; right: 6px; width: 22px; height: 22px; border-radius: 50%; border: 1.5px solid var(--c); background: var(--paper);
+  color: var(--c); font: italic 700 13px/1 Georgia, serif; padding: 0; display: flex; align-items: center; justify-content: center; }
+.lvtable { width: 100%; border-collapse: collapse; font-size: .85rem; text-align: center; }
+.lvtable th { font-size: .72rem; color: var(--muted); font-weight: 600; padding: 4px 2px; border-bottom: 2px solid var(--line); }
+.lvtable td { padding: 4px 2px; border-bottom: 1px solid var(--line); }
+.lvtable tr.done td { color: var(--muted); }
+.lvtable tr.now td { background: var(--cl); font-weight: 700; }

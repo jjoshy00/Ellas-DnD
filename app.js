@@ -140,7 +140,7 @@
     <section class="stats">
       ${stat('Lebenspunkte', cur(c.lpCur, lm), lm, 'lp')}
       ${stat(k.resource, cur(c.resCur, rm), rm, 'res')}
-      <div class="stat"><div class="lbl">Level</div><div class="val">${c.level}</div>
+      <div class="stat stat-info"><button class="info-i" data-act="levelInfo" aria-label="Level-Infos">i</button><div class="lbl">Level</div><div class="val">${c.level}</div>
         ${levelBar(c)}</div>
       <div class="stat"><div class="lbl">Punkte zu verteilen</div><div class="val">${free}</div>
         <div class="hint" style="margin:4px 0 0">für ATK, DEF oder Attributfähigkeit</div></div>
@@ -497,7 +497,21 @@
   function levelBar(c) {
     const p = pointsOf(c), lv = c.level, from = lv > 0 ? R.levelPoints[lv - 1] : 0, next = R.levelPoints[lv];
     const pct = next === undefined ? 100 : Math.max(0, Math.min(100, (p / next) * 100));
-    return `<div class="lvbar" title="Punkte bis zum nächsten Level"><div class="bar"><i style="width:${pct}%"></i></div><small>${p}/${next === undefined ? p : next}</small></div>`;
+    return `<div class="lvbar" title="${p}/${next === undefined ? p : next} Punkte"><div class="bar"><i style="width:${pct}%"></i></div></div>`;
+  }
+  // Info zum Level: aktuelle Punkte, alle Aufstiegsschwellen und Boni.
+  function levelInfo() {
+    const c = ch(), p = pointsOf(c), res = klassOf(c).resource;
+    const rows = R.levelPoints.map((need, i) => {
+      const bo = bonusAt(i), done = c.level > i, now = c.level === i;
+      return `<tr class="${done ? 'done' : ''}${now ? ' now' : ''}"><td>${i + 1}</td><td>${need}</td><td>+${bo.lp}</td><td>+${bo.res}</td><td>+${bo.attr}</td></tr>`;
+    }).join('');
+    const next = R.levelPoints[c.level];
+    openDialog(`<h3>Level ${c.level}</h3>
+      <p><b>${p}</b> Punkte${next !== undefined ? ` · nächstes Level ab <b>${next}</b> (noch ${next - p})` : ' · höchstes Level der Tabelle'}${c.lauf ? '<br><small class="hint">Punkte aus dem Laufzettel der DM.</small>' : ''}</p>
+      <table class="lvtable"><thead><tr><th>Level</th><th>ab Punkten</th><th>LP</th><th>${esc(res)}</th><th>Verteil-<br>punkte</th></tr></thead><tbody>${rows}</tbody></table>
+      <p class="hint">Die Boni gibt es beim Erreichen des jeweiligen Levels. Erreichte Level sind ausgegraut, das nächste ist hervorgehoben.</p>
+      <div class="row end"><button class="btn" data-d-act="close">Schließen</button></div>`, () => dlg.close());
   }
   function pointsCard(c) {
     const p = pointsOf(c), lv = c.level, from = lv > 0 ? R.levelPoints[lv - 1] : 0, next = R.levelPoints[lv];
@@ -1004,6 +1018,7 @@
         if (!t || !confirm(`„${t.what}“ (${t.p > 0 ? '+' : ''}${t.p}) zurücknehmen?`)) return;
         return addPoints(-t.p, 'Zurückgenommen: ' + t.what, i);
       }
+      case 'levelInfo': return levelInfo();
       case 'guild': return change((c) => { c.guild = Math.max(0, Math.min(R.guildMax, num(c.guild) + d)); });
       case 'slotExtra': return change((c) => { c.slotExtra = Math.max(0, num(c.slotExtra) + d); });
       case 'tx': return booking(d, b);
