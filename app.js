@@ -1046,8 +1046,14 @@
         if (!confirm(q)) return;
         return change((c) => { c.level = to; });
       }
-      case 'atk': if (!pointOk(d)) return; return change((c) => { c.atk = Math.max(0, c.atk + d); });
-      case 'def': if (!pointOk(d)) return; return change((c) => { c.def = Math.max(0, c.def + d); });
+      case 'atk': case 'def': {
+        const k = b.dataset.act, cur0 = num(ch()[k]);
+        if (d < 0) {
+          if (cur0 <= 0) return;
+          if (!confirm(`${k.toUpperCase()} von ${cur0} auf ${cur0 - 1} senken? Der Punkt wird wieder frei.`)) return;
+        } else if (!pointOk(d)) return;
+        return change((c) => { c[k] = Math.max(0, num(c[k]) + d); });
+      }
       case 'save': {
         const c = ch();
         if (!c.saves[i]) {
