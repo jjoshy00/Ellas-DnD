@@ -1127,7 +1127,12 @@
       }
       case 'levelInfo': return levelInfo();
       case 'editChar': return editChar();
-      case 'guild': return change((c) => { c.guild = Math.max(0, Math.min(R.guildMax, num(c.guild) + d)); });
+      case 'guild': {
+        const from = num(ch().guild), to = Math.max(0, Math.min(R.guildMax, from + d));
+        if (to === from) return;
+        if (!confirm(d > 0 ? `Abenteurergilde von Stufe ${from} auf Stufe ${to} erhöhen?` : `Abenteurergilde von Stufe ${from} auf Stufe ${to} senken?`)) return;
+        return change((c) => { c.guild = to; });
+      }
       case 'slotExtra': return change((c) => { c.slotExtra = Math.max(0, num(c.slotExtra) + d); });
       case 'tx': return booking(d, b);
       case 'export': return exportFile();
