@@ -23,6 +23,7 @@
   function hicks() {
     const c = newChar('Hicks', 'zauberer');
     c.player = 'Joshua';
+    c.slotExtra = 6; // Hicks hat 9 Inventarslots (3 Grund + 6)
     c.level = 1;
     c.laufName = 'Joshua';
     c.notes = 'Ansichten der Dorfbewohner über Hicks:\nKleiner Quatschkopf/Chaot, will sich beweisen, macht aus vielem einen Wettbewerb, irgendwie sympathisch. Die Kinder im Dorf finden ihn gleichermaßen seltsam wie lustig (wie ein cooler Opa); verbreitet gute Laune.\n\nHeimatdorf: Hella (einen Tagesritt südlich von Hallrodon).';
@@ -31,6 +32,7 @@
   function vince() {
     const c = newChar('Vince La Grak', 'handwerker');
     c.id = 'vince-la-grak'; c.player = 'Kim';
+    c.slotExtra = 6; // Vince hat 9 Inventarslots (3 Grund + 6)
     c.level = 1;
     c.laufName = 'Kim';
     c.notes = 'Ansichten der Dorfbewohner über Vince La Grak:\nHöflich, ruhig; lässt sich aber gern, vor allem von Hicks, zu Quatsch verleiten, ist aber dennoch bedacht und bedenkt die Konsequenzen seines Handelns; hält Hicks’ Schabernack auch oft im Zaum; viele Damen im Dorf finden ihn attraktiv.\n\nHeimatdorf: Hella (einen Tagesritt südlich von Hallrodon).';
@@ -72,6 +74,11 @@
       if (!S.chars.some((c) => c.name === 'Vince La Grak')) S.chars.push(withIds({ chars: [vince()] }).chars[0]);
     }
     S.players = [...new Set([...(S.players || []), ...S.chars.map((c) => c.player)])];
+    // Einmalig: Hicks und Vince La Grak bekommen 9 Inventarslots (neue Charaktere starten weiter mit 3).
+    if (!S.slots9V1) {
+      S.slots9V1 = true;
+      S.chars.forEach((c) => { if (['Hicks', 'Vince La Grak'].includes(c.name)) c.slotExtra = Math.max(num(c.slotExtra), 6); });
+    }
     // Einmalig: Vince La Grak ist Handwerker (nicht Künstler).
     if (!S.vinceHandwerkerV1) {
       S.vinceHandwerkerV1 = true;
