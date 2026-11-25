@@ -244,3 +244,7 @@ details summary { cursor: pointer; color: var(--c); font-size: .9rem; margin-top
 
 .icon-btn { color: var(--on-c, #fff); }
 .btn.fill, .sheet-tabs button.on, .item-no { color: var(--on-c, #fff); }
+
+.player { border: 1px solid var(--line); border-radius: 12px; padding: 8px 10px; margin-bottom: 10px; }
+.player-h { display: flex; align-items: center; gap: 8px; margin-bottom: 6px; }
+.player-h b { flex: 1; font-size: 1.05rem; }

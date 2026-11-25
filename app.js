@@ -22,6 +22,7 @@
   }
   function hicks() {
     const c = newChar('Hicks', 'zauberer');
+    c.player = 'Joshua';
     c.level = 1;
     c.laufName = 'Joshua';
     c.notes = 'Ansichten der Dorfbewohner über Hicks:\nKleiner Quatschkopf/Chaot, will sich beweisen, macht aus vielem einen Wettbewerb, irgendwie sympathisch. Die Kinder im Dorf finden ihn gleichermaßen seltsam wie lustig (wie ein cooler Opa); verbreitet gute Laune.\n\nHeimatdorf: Hella (einen Tagesritt südlich von Hallrodon).';
@@ -29,6 +30,7 @@
   }
   function vince() {
     const c = newChar('Vince La Grak', 'kuenstler');
+    c.id = 'vince-la-grak'; c.player = 'Kim';
     c.level = 1;
     c.laufName = 'Kim';
     c.notes = 'Ansichten der Dorfbewohner über Vince La Grak:\nHöflich, ruhig; lässt sich aber gern, vor allem von Hicks, zu Quatsch verleiten, ist aber dennoch bedacht und bedenkt die Konsequenzen seines Handelns; hält Hicks’ Schabernack auch oft im Zaum; viele Damen im Dorf finden ihn attraktiv.\n\nHeimatdorf: Hella (einen Tagesritt südlich von Hallrodon).';
@@ -58,6 +60,21 @@
     return st;
   }
   let S = withIds(load());
+  // Spieler: jeder Charakter gehört zu einem Spieler. Einmalig: Joshua (Hicks) und Kim (Vince La Grak) anlegen.
+  function initPlayers() {
+    S.chars.forEach((c) => {
+      if (c.player) return;
+      const pr = PRESETS.find((x) => x.name.toLowerCase() === String(c.name).trim().toLowerCase());
+      c.player = pr ? pr.who : 'Joshua';
+    });
+    if (!S.playersV1 && !S.firstRun) {
+      S.playersV1 = true;
+      if (!S.chars.some((c) => c.name === 'Vince La Grak')) S.chars.push(withIds({ chars: [vince()] }).chars[0]);
+    }
+    S.players = [...new Set([...(S.players || []), ...S.chars.map((c) => c.player)])];
+  }
+  initPlayers();
+  function syncPlayers() { S.players = [...new Set([...(S.players || []), ...S.chars.map((c) => c.player).filter(Boolean)])]; }
   function save() { try { localStorage.setItem(KEY, JSON.stringify(S)); } catch (e) { /* kein Speicher */ } }
   const ch = () => S.chars.find((c) => c.id === S.current) || S.chars[0];
 
@@ -915,20 +932,23 @@
     S.chars = S.chars.filter((x) => x.id !== S.replaceDefault);
     delete S.replaceDefault;
   }
-  function newCharDialog() {
-    openDialog(`<h3>Neuer Charakter</h3>
+  function newCharDialog(player) {
+    player = player || (ch() && ch().player) || (S.players || [])[0] || 'Spieler';
+    openDialog(`<h3>Neuer Charakter für ${esc(player)}</h3>
       <label class="f">Name<input id="nn" placeholder="Name"></label>
-      ${PRESETS.filter((pr) => !S.chars.some((c) => c.name === pr.name)).map((pr) => `<button class="choice" data-d-act="preset" data-n="${esc(pr.name)}" style="border-left:6px solid ${R.classes[pr.klass].color}">${esc(pr.name)} <small>Vorlage: ${esc(R.classes[pr.klass].name)}, Spieler ${esc(pr.who)}</small></button>`).join('')}
+      ${PRESETS.filter((pr) => pr.who === player && !S.chars.some((c) => c.name === pr.name)).map((pr) => `<button class="choice" data-d-act="preset" data-n="${esc(pr.name)}" style="border-left:6px solid ${R.classes[pr.klass].color}">${esc(pr.name)} <small>Vorlage: ${esc(R.classes[pr.klass].name)}, Spieler ${esc(pr.who)}</small></button>`).join('')}
       <p class="hint">Oder eigener Charakter: Name eintragen und Klasse wählen – sie lässt sich danach nicht mehr ändern.</p>
       ${Object.entries(R.classes).map(([key, v]) => `<button class="choice" data-d-act="klass" data-k="${key}" style="border-left:6px solid ${v.color}">${esc(v.name)}<small>Ressource: ${esc(v.resource)}</small></button>`).join('')}
       <div class="row end"><button class="btn" data-d-act="close">Abbrechen</button></div>`,
     (act, b) => {
       if (act === 'klass') {
         const c = newChar($('#nn', dlg).value.trim() || 'Neuer Charakter', b.dataset.k);
+        c.player = player;
         S.chars.push(c); S.current = c.id; S.tab = 'bogen'; dropDefault(); save(); render();
       }
       if (act === 'preset') {
         const c = withIds({ chars: [PRESETS.find((x) => x.name === b.dataset.n).make()] }).chars[0];
+        c.player = player;
         S.chars.push(c); S.current = c.id; S.tab = 'bogen'; dropDefault(); save(); render();
         refreshLaufzettel();
       }
@@ -936,16 +956,31 @@
     });
   }
 
+  // Auswahl: Spieler → Charaktere. Bei jedem Spieler „+ Charakter“, unten „+ Spieler“.
   function charMenu() {
-    openDialog(`<h3>Charaktere</h3><div class="char-list">
-      ${S.chars.map((c) => `<button class="choice${c.id === S.current ? ' on' : ''}" data-d-act="sel" data-id="${c.id}">${esc(c.name)}<small>${esc(klassOf(c).name)} · Level ${c.level}</small></button>`).join('')}</div>
-      <div class="row end"><button class="btn danger" data-d-act="del">Aktuellen löschen</button><button class="btn fill" data-d-act="new">+ Neuer Charakter</button></div>`,
+    syncPlayers();
+    openDialog(`<h3>Spieler & Charaktere</h3>
+      ${S.players.map((pl) => {
+        const mine = S.chars.filter((c) => c.player === pl);
+        return `<div class="player">
+          <div class="player-h"><b>${esc(pl)}</b>${mine.length ? '' : `<button class="link danger" data-d-act="delPlayer" data-p="${esc(pl)}">Spieler entfernen</button>`}<button class="btn small" data-d-act="new" data-p="${esc(pl)}">+ Charakter</button></div>
+          ${mine.map((c) => `<button class="choice${c.id === S.current ? ' on' : ''}" data-d-act="sel" data-id="${c.id}" style="border-left:6px solid ${klassOf(c).color}">${esc(c.name)}<small>${esc(klassOf(c).name)} · Level ${c.level}</small></button>`).join('') || '<p class="hint">Noch kein Charakter.</p>'}
+        </div>`;
+      }).join('')}
+      <div class="row end"><button class="btn danger" data-d-act="del">Aktuellen Charakter löschen</button><button class="btn fill" data-d-act="newPlayer">+ Spieler</button></div>`,
     (act, b) => {
       if (act === 'sel') { S.current = b.dataset.id; save(); render(); }
-      if (act === 'new') return newCharDialog();
+      if (act === 'new') return newCharDialog(b.dataset.p);
+      if (act === 'newPlayer') {
+        const name = (prompt('Name des neuen Spielers:') || '').trim();
+        if (!name) return;
+        if (S.players.includes(name)) return alert('Diesen Spieler gibt es schon.');
+        S.players.push(name); save(); return charMenu();
+      }
+      if (act === 'delPlayer') { S.players = S.players.filter((x) => x !== b.dataset.p); save(); return charMenu(); }
       if (act === 'del') {
         if (S.chars.length < 2) return alert('Der letzte Charakter kann nicht gelöscht werden.');
-        if (!confirm(`„${ch().name}“ wirklich löschen?`)) return;
+        if (!confirm(`„${ch().name}“ (${ch().player}) wirklich löschen?`)) return;
         S.chars = S.chars.filter((c) => c.id !== S.current); S.current = S.chars[0].id; save(); render();
       }
       dlg.close();
@@ -1115,7 +1150,7 @@
   const loadSync = () => { try { return JSON.parse(localStorage.getItem(SYNC_KEY)) || {}; } catch (e) { return {}; } };
   let Y = loadSync();
   const saveSync = () => { try { localStorage.setItem(SYNC_KEY, JSON.stringify(Y)); } catch (e) { /* kein Speicher */ } };
-  const shared = (st) => JSON.parse(JSON.stringify({ chars: st.chars.map(({ lauf, ...c }) => c) }));
+  const shared = (st) => JSON.parse(JSON.stringify({ chars: st.chars.map(({ lauf, ...c }) => c), players: st.players || [] }));
 
   // JSON mit sortierten Schlüsseln vergleichen
   const canon = (v) => JSON.stringify(v, (k, x) => (x && typeof x === 'object' && !Array.isArray(x) ? Object.keys(x).sort().reduce((o, key) => { o[key] = x[key]; return o; }, {}) : x));
@@ -1135,6 +1170,7 @@
       return out;
     }
     if ((last === 'points' || (path.includes('aspects') && (last === 'punkte' || last === 'spent'))) && typeof l === 'number' && typeof r === 'number') return num(b) + (l - num(b)) + (r - num(b));
+    if (last === 'players' && Array.isArray(l) && Array.isArray(r)) return [...new Set([...l, ...r])];
     if ((last === 'moneyLog' || last === 'pointsLog') && Array.isArray(l) && Array.isArray(r)) {
       const seen = new Set(), all = [];
       [...l, ...r].forEach((t) => { const k = canon(t); if (!seen.has(k)) { seen.add(k); all.push(t); } });
@@ -1408,7 +1444,12 @@
         <button class="choice" data-d-act="own">Eigener Charakter<small>Name und Klasse selbst festlegen</small></button>`,
       (act, b) => {
         delete S.firstRun;
-        if (act === 'pick') { const c = withIds({ chars: [PRESETS.find((x) => x.name === b.dataset.n).make()] }).chars[0]; S.chars = [c]; S.current = c.id; }
+        if (act === 'pick') {
+          const pr = PRESETS.find((x) => x.name === b.dataset.n), c = withIds({ chars: [pr.make()] }).chars[0];
+          S.chars = [c]; S.current = c.id; S.players = [pr.who];
+          if (pr.who !== 'Joshua') S.playersV1 = true; // nur auf Joshuas Gerät zusätzlich Kim/Vince anlegen
+        }
+        if (act === 'own') S.playersV1 = true;
         save(); render(); dlg.close();
         if (act === 'own') { S.replaceDefault = S.chars[0].id; newCharDialog(); }
         done();
