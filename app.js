@@ -723,6 +723,7 @@
     <section class="card"><h2>Notizen</h2>
       <textarea data-bind="notes" rows="14">${esc(c.notes)}</textarea></section>
     ${syncCard()}
+    <p class="hint" style="text-align:center">App-Fassung ${esc((document.querySelector('script[src^="app.js"]') || {}).src ? new URL(document.querySelector('script[src^="app.js"]').src).searchParams.get('v') || '?' : '?')}</p>
     <section class="card"><h2>Sicherung</h2>
       <p class="hint">Die Daten liegen nur auf diesem Gerät. Ab und zu sichern, z. B. in Google Drive.</p>
       <div class="row">
