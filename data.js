@@ -268,8 +268,11 @@ window.RULES = {
       charts: [{ key: 'k', label: '', aspects: ['Ausweichen', 'Parieren', 'Kontern', 'Angreifen'] }] },
     { key: 'zauber', title: 'Zauber', klass: 'zauberer', listName: 'Zauber', thresholds: 'zauber',
       charts: [
-        { key: 'art', label: 'Einordnung & Methode', aspects: ['Wechselhaft', 'Negativ', 'Verbalmagie', 'Bewegungsmagie', 'Chaosmagie', 'Runenmagie', 'Positiv', 'Neutral'] },
-        { key: 'element', label: 'Elemente', aspects: ['Erde', 'Feuer', 'Hitze', 'Dunkelheit', 'Licht', 'Kälte', 'Wasser', 'Luft'] },
+        // Die Achterkreise sind je zwei Kreise in einer Darstellung: pro Gruppe ist genau ein Feld wählbar.
+        { key: 'art', label: 'Einordnung & Methode', aspects: ['Wechselhaft', 'Negativ', 'Verbalmagie', 'Bewegungsmagie', 'Chaosmagie', 'Runenmagie', 'Positiv', 'Neutral'],
+          groups: [{ label: 'Einordnung', aspects: ['Positiv', 'Neutral', 'Wechselhaft', 'Negativ'] }, { label: 'Methode', aspects: ['Runenmagie', 'Chaosmagie', 'Bewegungsmagie', 'Verbalmagie'] }] },
+        { key: 'element', label: 'Elemente', aspects: ['Erde', 'Feuer', 'Hitze', 'Dunkelheit', 'Licht', 'Kälte', 'Wasser', 'Luft'],
+          groups: [{ label: 'Grundelement', aspects: ['Wasser', 'Luft', 'Erde', 'Feuer'] }, { label: 'Übergeordnetes Element', aspects: ['Kälte', 'Licht', 'Dunkelheit', 'Hitze'] }] },
         { key: 'mod', label: 'Modifikator', aspects: ['Erschaffen', 'Zusammenführen', 'Auslöschen', 'Trennen'] },
       ] },
     { key: 'kunst', title: 'Kunst', klass: 'kuenstler', listName: 'Technik', thresholds: 'normal',

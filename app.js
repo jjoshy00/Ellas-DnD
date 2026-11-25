@@ -820,11 +820,14 @@
       <label class="f">Name<input id="tn" value="${esc(t.name)}"></label>
       <label class="f">Schwierigkeit<select id="td">${Object.entries(R.difficulties).map(([key, v]) => `<option value="${key}"${key === t.diff ? ' selected' : ''}${!own && key !== 'leicht' && key !== 'sonstiges' ? ' disabled' : ''}>${v}</option>`).join('')}</select></label>
       <label class="f" id="tdxw"${t.diff === 'sonstiges' ? '' : ' hidden'}>Sonstiges (Freitext)<input id="tdx" value="${esc(t.diffText || '')}" placeholder="z. B. mit der DM vereinbart"></label>
-      <p class="hint">Welche Abschnitte belegt sie? Beim Anwenden bekommt jeder die vergebenen Punkte.</p>
-      ${sheet.charts.map((ct) => `${ct.label ? `<div class="group-h">${esc(ct.label)}</div>` : ''}<div class="aspect-pick">${ct.aspects.map((a) => {
-        const key = aspectKey(sheet.key, ct.key, a);
-        return `<label><input type="checkbox" value="${esc(key)}"${t.aspects.includes(key) ? ' checked' : ''}>${esc(a)}</label>`;
-      }).join('')}</div>`).join('')}
+      <p class="hint">Welche Abschnitte belegt sie? Pro Kreis ein Feld. Beim Anwenden bekommt jedes gewählte Feld die vergebenen Punkte.</p>
+      ${sheet.charts.map((ct, ci) => (ct.groups || [{ label: ct.label || (sheet.charts.length > 1 ? `Kreis ${ci + 1}` : ''), aspects: ct.aspects }]).map((g, gi) => {
+        const name = `ap-${ci}-${gi}`, keys = g.aspects.map((a) => aspectKey(sheet.key, ct.key, a));
+        const has = keys.find((k) => t.aspects.includes(k));
+        return `${g.label ? `<div class="group-h">${esc(g.label)}</div>` : ''}<div class="aspect-pick">
+          <label><input type="radio" name="${name}" value=""${has ? '' : ' checked'}>keins</label>
+          ${g.aspects.map((a, i) => `<label><input type="radio" name="${name}" value="${esc(keys[i])}"${keys[i] === has ? ' checked' : ''}>${esc(a)}</label>`).join('')}</div>`;
+      }).join('')).join('')}
       <div class="grid2"><label class="f">Stufe<input type="text" inputmode="numeric" id="ts" value="${t.stufe}"></label><label class="f">Punkte<input type="text" inputmode="numeric" id="tp" value="${t.punkte}"></label></div>
       <label class="f">Notiz${sheet.listName === 'Zauber' ? ' / Aufbau' : ''}<input id="tt" value="${esc(t.note)}"></label>
       ${t.id ? '' : `<div class="cost">
@@ -842,7 +845,7 @@
         const name = $('#tn', dlg).value.trim();
         if (!name) return $('#tn', dlg).focus();
         const upd = { id: t.id || uid(), name, diff: $('#td', dlg).value, diffText: $('#td', dlg).value === 'sonstiges' ? $('#tdx', dlg).value.trim() : '', stufe: Math.max(0, num($('#ts', dlg).value)), punkte: Math.max(0, num($('#tp', dlg).value)),
-          aspects: [...dlg.querySelectorAll('.aspect-pick input:checked')].map((x) => x.value), note: $('#tt', dlg).value.trim() };
+          aspects: [...dlg.querySelectorAll('.aspect-pick input:checked')].map((x) => x.value).filter(Boolean), note: $('#tt', dlg).value.trim() };
         const cost = t.id ? 0 : num(($('#tc', dlg).value || '').replace(/\D/g, ''), 0);
         const payId = t.id ? '' : $('#tcs', dlg).value;
         if (cost) {
