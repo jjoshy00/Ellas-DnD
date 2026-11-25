@@ -29,7 +29,7 @@
     return c;
   }
   function vince() {
-    const c = newChar('Vince La Grak', 'kuenstler');
+    const c = newChar('Vince La Grak', 'handwerker');
     c.id = 'vince-la-grak'; c.player = 'Kim';
     c.level = 1;
     c.laufName = 'Kim';
@@ -39,7 +39,7 @@
   // Fertige Charaktere der Kampagne (zur Auswahl beim ersten Start und unter „Neuer Charakter“).
   const PRESETS = [
     { make: hicks, name: 'Hicks', klass: 'zauberer', who: 'Joshua' },
-    { make: vince, name: 'Vince La Grak', klass: 'kuenstler', who: 'Kim' },
+    { make: vince, name: 'Vince La Grak', klass: 'handwerker', who: 'Kim' },
   ];
   function load() {
     try {
@@ -72,8 +72,14 @@
       if (!S.chars.some((c) => c.name === 'Vince La Grak')) S.chars.push(withIds({ chars: [vince()] }).chars[0]);
     }
     S.players = [...new Set([...(S.players || []), ...S.chars.map((c) => c.player)])];
+    // Einmalig: Vince La Grak ist Handwerker (nicht Künstler).
+    if (!S.vinceHandwerkerV1) {
+      S.vinceHandwerkerV1 = true;
+      S.chars.forEach((c) => { if (c.name === 'Vince La Grak' && c.klass === 'kuenstler') { c.klass = 'handwerker'; c.sub = ''; S.sheetFor = null; } });
+    }
   }
   initPlayers();
+  try { localStorage.setItem(KEY, JSON.stringify(S)); } catch (e) { /* kein Speicher */ }
   function syncPlayers() { S.players = [...new Set([...(S.players || []), ...S.chars.map((c) => c.player).filter(Boolean)])]; }
   function save() { try { localStorage.setItem(KEY, JSON.stringify(S)); } catch (e) { /* kein Speicher */ } }
   const ch = () => S.chars.find((c) => c.id === S.current) || S.chars[0];
